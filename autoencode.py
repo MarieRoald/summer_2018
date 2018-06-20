@@ -11,6 +11,7 @@ from pprint import pprint
 import matplotlib.pyplot as plt
 
 def create_layers(layer_dict_list, input_shape=None):
+    """Creates a list of keras layers from a list of dictionaries containing parameters"""
     layers = []
 
     if input_shape is not None:
@@ -27,10 +28,11 @@ def create_layers(layer_dict_list, input_shape=None):
     return layers
         
 def create_autoencoder(encoder_config, decoder_config, input_shape=None, latent_shape=None):
+    """Creates an autoencoder model from dictionaries containing the parameters"""
     encoder_layers = create_layers(encoder_config, input_shape=input_shape)
     decoder_layers = create_layers(decoder_config, input_shape=latent_shape)
 
-    #Jeg kan jo også legge til input layers uten for create layers funksjonen?
+    #Jeg kan jo også legge til input layers utenfor create layers funksjonen?
 
     encoder = km.Sequential(encoder_layers)
     decoder = km.Sequential(decoder_layers)
