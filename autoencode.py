@@ -106,6 +106,10 @@ if __name__== "__main__":
 
     encoded_pca = PCA().fit_transform(encoded)
 
+
+
+    print(ae.evaluate(data, data)/data.shape[1])
+
     plt.scatter(encoded_pca[:,0], encoded_pca[:,1])
     plt.show()
 

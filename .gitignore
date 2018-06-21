@@ -1,0 +1,9 @@
+/data/*
+*.csv
+.dropbox/*
+.dropbox
+.ipynb_checkpoints/*
+notebooks/.ipynb_checkpoints/*
+
+
+
