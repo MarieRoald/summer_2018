@@ -1,4 +1,4 @@
-from comet_ml import Experiment
+
 import keras.layers as kl
 import keras.models as km
 import keras.regularizers as kr
@@ -99,7 +99,6 @@ if __name__== "__main__":
                                     latent_shape=latent_shape)
 
     ae.compile(optimizer="adam", loss="mean_squared_error")
-    experiment = Experiment(project_name="Autoencoder demo", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
 
     ae.fit(data, data, shuffle=True, epochs=1000, batch_size=32, validation_split=0.3, verbose=1)
     encoded = encoder.predict(data)
