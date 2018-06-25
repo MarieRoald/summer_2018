@@ -18,6 +18,9 @@ from sklearn.pipeline import make_pipeline
 
 from sklearn.base import clone
 
+import numpy as np
+import keras
+
 
 class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
@@ -40,11 +43,11 @@ class Autoencoder:
         # TODO: fix that shit
         self.ae.compile(optimizer="adam", loss=loss)
 
-    def fit(self, X,*args, shuffle=True, epochs=500, batch_size=32, verbose=1,
+    def fit(self, X,*args, shuffle=True, epochs=50, batch_size=32, verbose=1,
             **kwargs):
         """ """
         self.ae.fit(X, X, shuffle=shuffle, epochs=epochs, batch_size=batch_size,
-                    verbose=verbose)
+                    verbose=verbose, **kwargs)
 
     def get_params(self, deep=False):
         return self._input_params
@@ -94,25 +97,58 @@ class Autoencoder:
                                         **config_dict["kwargs"]))
 
         return layers
+"""
+class LogCross(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
 
-def my_cross_validate(clf, data, target, groups, n_splits=5):
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+"""
+def my_cross_validate(clf, data, target, groups, experiment, n_splits=5):
+
+    data = data.values
+    target = target.values
 
     group_kfold = GroupKFold(n_splits=n_splits)
 
     val_losses = []
 
-    for train_idxs, val_idxs in group_kfold.split():
+    for train_index, test_index in group_kfold.split(data, target, groups):
+        print("TRAIN:", train_index, "TEST:", test_index)
+        print(data)
+        print(data[train_index])
         new_clf = clone(clf)
-        new_clf.fit(data[train_idxs])
-        predictions = new_clf.predict(data[val_idxs])
+        new_clf.fit(data[train_index])
+        predictions = new_clf.predict(data[test_index])
+
+        
+        val_rmse = np.sqrt(((predictions - target[test_index]) ** 2).mean())
         
         # Should we assume that clf has evaluate?
 
-        val_loss = clf.evaluate(data[val_idx], target[val_idxs])
-        val_losses.append(val_loss)
+        # val_loss = new_clf.evaluate(data.iloc[test_index], target.iloc[test_index])
+        val_losses.append(val_rmse)
 
+    return val_losses
 
-    
+class CrossEntropyCometLogger(keras.callbacks.Callback):
+
+    def __init__(self, experiment, log_name):
+        self.experiment = experiment
+        self.step_count = 1
+        self.epoch_count = 1
+        self.log_name = log_name
+        
+    def on_batch_end(self, batch, logs=None):
+        logs = {} if logs is None else logs
+        self.experiment.log_metric(f"{self.log_name}_loss", logs.get('loss'), step=self.step_count)
+        self.step_count = self.step_count + 1 
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = {} if logs is None else logs
+        if "val_loss" in logs:
+            self.experiment.log_metric(f"{self.log_name}_val_loss", logs.get('loss'), step=self.step_count)
 
 
 if __name__== "__main__":
@@ -176,7 +212,6 @@ if __name__== "__main__":
                      optimizer_params=None)
 
 
-    ae.fit(X=data)
     group_kfold = GroupKFold(n_splits=5)
     groups = pd.read_csv("ID_train.csv", index_col=0,
                           names=["Sample ID", "Person ID"])
@@ -185,14 +220,22 @@ if __name__== "__main__":
     clf = make_pipeline(scaler, ae)
 
 
-    experiment = Experiment(project_name="Autoencoder demo", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment.log_metric("test2",np.array([2,4,6]), np.array([1,2,3]))
 
+    for i,j in zip([2,4,6],[1,2,3]):
+        experiment.log_metric("test",i,j)
+
+    comet_logger = CrossEntropyCometLogger(experiment, "TEST")
+    
+    ae.fit(data, callbacks=[comet_logger] )
     """
     scores = cross_validate(clf, data, data, groups=groups,
                             scoring="neg_mean_squared_error",
                             cv=group_kfold, return_train_score=True)
-    """
+
 
     scores = my_cross_validate(clf, data, data, groups)
 
     print(scores)
+    """
