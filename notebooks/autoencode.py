@@ -14,13 +14,13 @@ from sklearn.model_selection import GroupKFold
 from sklearn.metrics.scorer import make_scorer
 from sklearn.model_selection import cross_validate
 
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 
 from sklearn.base import clone
 
 import numpy as np
 import keras
-
+import seaborn as sns
 
 class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
@@ -43,7 +43,7 @@ class Autoencoder:
         # TODO: fix that shit
         self.ae.compile(optimizer="adam", loss=loss)
 
-    def fit(self, X,*args, shuffle=True, epochs=50, batch_size=32, verbose=1,
+    def fit(self, X,*args, shuffle=True, epochs=500, batch_size=32, verbose=1,
             **kwargs):
         """ """
         self.ae.fit(X, X, shuffle=shuffle, epochs=epochs, batch_size=batch_size,
@@ -64,14 +64,18 @@ class Autoencoder:
     def create_autoencoder(self, encoder_config, decoder_config,
                            input_shape=None, latent_shape=None):
         """Creates an autoencoder model from dicts containing the parameters"""
-        encoder_layers = self.create_layers(encoder_config,
+        self.encoder_layers = self.create_layers(encoder_config,
                                             input_shape=input_shape)
-        decoder_layers = self.create_layers(decoder_config,
+        self.decoder_layers = self.create_layers(decoder_config,
                                             input_shape=latent_shape)
 
-        encoder = km.Sequential(encoder_layers)
-        decoder = km.Sequential(decoder_layers)
-        autoencoder_model = km.Sequential(encoder_layers + decoder_layers)
+        #self.decoder_layers = self.create_layers(decoder_config)
+
+        input_layer = [kl.InputLayer(input_shape=latent_shape)]
+
+        encoder = km.Sequential(self.encoder_layers)
+        decoder = km.Sequential(self.decoder_layers)
+        autoencoder_model = km.Sequential(self.encoder_layers + self.decoder_layers[1:] )
 
         return encoder, decoder, autoencoder_model
 
@@ -97,41 +101,53 @@ class Autoencoder:
                                         **config_dict["kwargs"]))
 
         return layers
-"""
-class LogCross(keras.callbacks.Callback):
-    def on_train_begin(self, logs={}):
-        self.losses = []
 
-    def on_batch_end(self, batch, logs={}):
-        self.losses.append(logs.get('loss'))
-"""
-def my_cross_validate(clf, data, target, groups, experiment, n_splits=5):
+def plot_loss(mean_loss, std_loss, steps):
+	colors = sns.color_palette()
+	fig = plt.figure()
+	ax = fig.add_subplot(111) 
+	ax.fill_between(steps, mean_loss + std_loss, np.maximum(mean_loss - std_loss, 0), facecolor=colors[1], alpha=0.2, color = colors[1], label='std')
+	ax.plot(steps, mean_loss, color = colors[1], linestyle="--")
+	return fig
 
+
+def my_cross_validate(clf, data, groups, experiment, n_splits=10, standardize=True):
     data = data.values
-    target = target.values
 
     group_kfold = GroupKFold(n_splits=n_splits)
 
     val_losses = []
+    val_errors = []
 
-    for train_index, test_index in group_kfold.split(data, target, groups):
-        print("TRAIN:", train_index, "TEST:", test_index)
-        print(data)
-        print(data[train_index])
+    for i, (train_index, test_index) in enumerate(group_kfold.split(data, data, groups)):
+        comet_logger = CrossEntropyCometLogger(experiment, f"cv_fold_{i}")
         new_clf = clone(clf)
-        new_clf.fit(data[train_index])
-        predictions = new_clf.predict(data[test_index])
 
+        train_data = data[train_index]
+        test_data = data[test_index]
+        if standardize:
+            scaler = StandardScaler()
+            train_data = scaler.fit_transform(train_data)
+            test_data = scaler.transform(test_data)
+
+        history = new_clf.fit(train_data,
+                              validation_data=(test_data, test_data),
+                              callbacks=[comet_logger])
+
+        val_losses.append(comet_logger.val_loss)
         
-        val_rmse = np.sqrt(((predictions - target[test_index]) ** 2).mean())
+        predictions = new_clf.predict(test_data)
+        val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
+        val_errors.append(val_rmse)
+
+    val_losses = np.array(val_losses)
+    mean_loss = val_losses.mean(0)
+    std_loss = val_losses.std(0)
+    fig = plot_loss(mean_loss, std_loss, np.array(comet_logger.val_steps))
+    experiment.log_figure("fig_test", fig)
+    fig.show()
+    return val_errors
         
-        # Should we assume that clf has evaluate?
-
-        # val_loss = new_clf.evaluate(data.iloc[test_index], target.iloc[test_index])
-        val_losses.append(val_rmse)
-
-    return val_losses
-
 class CrossEntropyCometLogger(keras.callbacks.Callback):
 
     def __init__(self, experiment, log_name):
@@ -139,16 +155,25 @@ class CrossEntropyCometLogger(keras.callbacks.Callback):
         self.step_count = 1
         self.epoch_count = 1
         self.log_name = log_name
+        self.train_loss = []
+        self.train_steps = []
+        self.val_loss = []
+        self.val_steps = []
         
     def on_batch_end(self, batch, logs=None):
         logs = {} if logs is None else logs
         self.experiment.log_metric(f"{self.log_name}_loss", logs.get('loss'), step=self.step_count)
+        self.train_steps.append(self.step_count)
+        self.train_loss.append(logs.get("loss"))
         self.step_count = self.step_count + 1 
 
     def on_epoch_end(self, epoch, logs=None):
         logs = {} if logs is None else logs
         if "val_loss" in logs:
             self.experiment.log_metric(f"{self.log_name}_val_loss", logs.get('loss'), step=self.step_count)
+            self.val_steps.append(self.step_count)
+            self.val_loss.append(logs.get("loss"))
+
 
 
 if __name__== "__main__":
@@ -159,7 +184,7 @@ if __name__== "__main__":
     data = pd.concat([data1, data2, data3], axis=1)
 
     input_shape = (data.shape[1],)
-    latent_shape = (16,)
+    latent_shape = (100,)
 
     config = {
         "encoder": [
@@ -167,7 +192,7 @@ if __name__== "__main__":
                 "name": "hidden1_encoder",
                 "type": "Dense",
                 "kwargs": {
-                    "units": 32,
+                    "units": 200,
                     "activation": "relu"
                 },
                 "regularizer": {
@@ -189,7 +214,7 @@ if __name__== "__main__":
                 "name": "hidden1_decoder",
                 "type": "Dense",
                 "kwargs": {
-                    "units": 32,
+                    "units": 200,
                     "activation": "relu"
                 }
             },
@@ -210,32 +235,24 @@ if __name__== "__main__":
                      latent_shape=latent_shape,
                      loss="mean_squared_error",
                      optimizer_params=None)
-
-
+                     
     group_kfold = GroupKFold(n_splits=5)
     groups = pd.read_csv("ID_train.csv", index_col=0,
                           names=["Sample ID", "Person ID"])
 
     scaler = StandardScaler()
-    clf = make_pipeline(scaler, ae)
-
-
+    clf = Pipeline(steps=[('standardscaler', scaler), ('autoencoder', ae)])
+    
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
     experiment.log_metric("test2",np.array([2,4,6]), np.array([1,2,3]))
 
-    for i,j in zip([2,4,6],[1,2,3]):
-        experiment.log_metric("test",i,j)
-
-    comet_logger = CrossEntropyCometLogger(experiment, "TEST")
-    
-    ae.fit(data, callbacks=[comet_logger] )
     """
     scores = cross_validate(clf, data, data, groups=groups,
                             scoring="neg_mean_squared_error",
                             cv=group_kfold, return_train_score=True)
 
-
-    scores = my_cross_validate(clf, data, data, groups)
-
-    print(scores)
     """
+    scores = my_cross_validate(ae, data, groups, experiment=experiment)
+
+    print([score/data.shape[1] for score in scores])
+
