@@ -117,34 +117,6 @@ class Autoencoder:
 
         return layers
 
-def plot_loss(mean_loss, std_loss, steps, color=None):
-    """Plot mean and standard deviation loss.
-    
-    
-    Parameters
-    ----------
-    mean_loss: np.array
-        Mean loss to plot as a dashed line
-    std_loss: np.array
-        Standard deviation of loss
-    steps: np.array
-        Steps corresponding to the loss
-        
-    """
-    if color is None:
-        color = sns.color_palette()[0]
-    fig = plt.figure()
-    ax = fig.add_subplot(111) 
-    ax.fill_between(steps, 
-                    mean_loss + std_loss, 
-                    np.maximum(mean_loss - std_loss, 0), 
-                    facecolor=color, 
-                    alpha=0.2, 
-                    color = color, 
-                    label='std')
-    ax.plot(steps, mean_loss, color=color, linestyle="--")
-    return fig
-
 def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
     """Plot mean and standard deviation of loss.
     
@@ -154,7 +126,18 @@ def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
         2D array containing the loss values (num runs x num steps)
     steps: ndarray
         1D array containing the steps corresponding to the loss
-    color: 
+    color: matplotlib color (optional)
+        Color used to plot the mean loss (std is plotted with the same color, but lower opacity)
+    legend: string (optional)
+        Prefix for the legends.
+    ax: Axes (optional):
+        Axes to draw the plots in. If `None`, a new figure and axis is created.
+
+    Returns
+    -------
+
+    fig: Figure
+        Figure containing the plot
     """
 
     mean_loss = loss.mean(0)
