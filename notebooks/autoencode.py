@@ -5,6 +5,7 @@ import keras.regularizers as kr
 import keras.optimizers as ko
 
 from keras import backend as K
+import keras
 
 import pandas as pd
 from sklearn.decomposition import PCA
@@ -20,7 +21,7 @@ from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.base import clone
 
 import numpy as np
-import keras
+from log_utils import plot_mean_std_loss, GroupedCometLogger
 import seaborn as sns
 
 class Autoencoder:
@@ -127,6 +128,30 @@ class Autoencoder:
 
         return layers
 
+    def _standardize_data(self, train_data, val_data):
+
+        scaler = StandardScaler()
+        train_data = scaler.fit_transform(train_data)
+        val_data = scaler.transform(val_data)
+        return train_data, val_data, scaler
+
+    def _rmse(self, val_data):
+        predictions = self.predict(val_data)
+        val_rmse = np.sqrt(((predictions - val_data)**2).mean())
+        return val_rmse
+    
+    def _crossval_plots(self, train_losses, train_steps, val_losses, val_steps):
+        fig = plt.figure()
+        ax = fig.add_subplot(111) 
+
+        val_losses = np.array(val_losses)
+        train_losses = np.array(train_losses)
+        colors = sns.color_palette()
+        
+        plot_mean_std_loss(train_losses, train_steps, ax=ax, color=colors[1], legend="train")
+        plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
+
+
     def cross_validate(self, data, groups, experiment,  n_splits=10, 
                        standardize=True, epochs=100):
         data = np.asarray(data)
@@ -139,120 +164,24 @@ class Autoencoder:
 
         for i, (train_idx, val_idx) in enumerate(kfold.split(data, data, groups)):
             self.reset()
-
-            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
-            callbacks = [comet_logger]
-
             train_data, val_data = data[train_idx], data[val_idx]
+            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
 
             if standardize:
-                scaler = StandardScaler()
-                train_data = scaler.fit_transform(train_data)
-                test_data = scaler.transform(val_data)
+                train_data, val_data, _ = self._standardize_data(train_data, val_data)
 
-            history = ae.fit(train_data,
-                             epochs=epochs,
-                             validation_data=(test_data, test_data),
-                             callbacks=callbacks)
+            ae.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
+                   callbacks=[comet_logger])
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
-            
-            predictions = ae.predict(test_data)
-            val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
-            val_errors.append(val_rmse)
+            val_errors.append(self._rmse(val_data))
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111) 
-
-        val_losses = np.array(val_losses)
-        train_losses = np.array(train_losses)
-        colors = sns.color_palette()
-        
-        plot_mean_std_loss(val_losses, np.array(comet_logger.val_steps), ax=ax, color=colors[0], legend="val")
-        plot_mean_std_loss(train_losses, np.array(comet_logger.train_steps), ax=ax, color=colors[1], legend="train")
+        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
+                                   val_losses, comet_logger.val_steps)
         experiment.log_figure("Cross validation loss", fig)
 
         return val_errors
-
-def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
-    """Plot mean and standard deviation of loss.
-    
-    Parameters
-    ----------
-    loss: ndarray
-        2D array containing the loss values (num runs x num steps)
-    steps: ndarray
-        1D array containing the steps corresponding to the loss
-    color: matplotlib color (optional)
-        Color used to plot the mean loss (std is plotted with the same color, but lower opacity)
-    legend: string (optional)
-        Prefix for the legends.
-    ax: Axes (optional):
-        Axes to draw the plots in. If `None`, a new figure and axis is created.
-
-    Returns
-    -------
-
-    fig: Figure
-        Figure containing the plot
-    """
-
-    mean_loss = loss.mean(0)
-    std_loss = loss.std(0)
-
-    if color is None:
-        color = sns.color_palette()[0]
-    if ax is None:
-        fig = plt.figure()
-        ax = fig.add_subplot(111) 
-    else:
-        fig = ax.get_figure()
-
-    std_plot = ax.fill_between(steps, 
-                               mean_loss + std_loss, 
-                               np.maximum(mean_loss - std_loss, 0), 
-                               facecolor=color, 
-                               alpha=0.2, 
-                               color=color, 
-                               label=legend+' std')
-
-    ax.plot(steps, mean_loss, color=color, linestyle="--", label=legend+" mean")
-    ax.legend()
-    ax.set_xlabel("Step")
-    ax.set_ylabel("Loss")
-
-    return fig
-
-class GroupedCometLogger(keras.callbacks.Callback):
-
-    def __init__(self, experiment, log_name):
-        self.experiment = experiment
-        self.step_count = 1
-        self.epoch_count = 1
-        self.log_name = log_name
-        self.train_loss = []
-        self.train_steps = []
-        self.val_loss = []
-        self.val_steps = []
-        
-    def on_batch_end(self, batch, logs=None):
-        logs = {} if logs is None else logs
-        self.experiment.log_metric(f"{self.log_name}_loss", 
-                                   logs.get('loss'), 
-                                   step=self.step_count)
-        self.train_steps.append(self.step_count)
-        self.train_loss.append(logs.get("loss"))
-        self.step_count = self.step_count + 1 
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = {} if logs is None else logs
-        if "val_loss" in logs:
-            self.experiment.log_metric(f"{self.log_name}_val_loss", 
-                                       logs.get('loss'), 
-                                       step=self.step_count)
-            self.val_steps.append(self.step_count)
-            self.val_loss.append(logs.get("loss"))
 
 if __name__== "__main__":
     data1 = pd.read_csv("X1_train.csv", index_col=0)
@@ -314,8 +243,6 @@ if __name__== "__main__":
                      loss="mean_squared_error",
                      optimizer_params=None)
 
-    ae.reset()
-                     
     group_kfold = GroupKFold(n_splits=5)
     groups = pd.read_csv("ID_train.csv", index_col=0,
                           names=["Sample ID", "Person ID"])
