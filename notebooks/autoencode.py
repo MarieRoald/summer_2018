@@ -246,6 +246,7 @@ if __name__== "__main__":
     groups = data_reader.get_groups()
 
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment.log_parameter("Experiment name", "Cross validate test")
     scores = ae.cross_validate(data, groups, experiment=experiment)
 
     print(scores)
