@@ -21,8 +21,10 @@ from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.base import clone
 
 import numpy as np
-from log_utils import plot_mean_std_loss, GroupedCometLogger
 import seaborn as sns
+
+from log_utils import plot_mean_std_loss, GroupedCometLogger
+from data_reader import DataReader
 
 class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
@@ -151,11 +153,10 @@ class Autoencoder:
         plot_mean_std_loss(train_losses, train_steps, ax=ax, color=colors[1], legend="train")
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
-
     def cross_validate(self, data, groups, experiment,  n_splits=10, 
                        standardize=True, epochs=100):
-        data = np.asarray(data)
 
+        data = np.asarray(data)
         kfold = GroupKFold(n_splits=n_splits)
 
         val_losses = []
@@ -184,11 +185,9 @@ class Autoencoder:
         return val_errors
 
 if __name__== "__main__":
-    data1 = pd.read_csv("X1_train.csv", index_col=0)
-    data2 = pd.read_csv("X2_train.csv", index_col=0)
-    data3 = pd.read_csv("X3_train.csv", index_col=0)
-
-    data = pd.concat([data1, data2, data3], axis=1)
+    filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
+    data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
+    data = data_reader.get_all_data()
 
     input_shape = (data.shape[1],)
     latent_shape = (100,)
@@ -244,8 +243,7 @@ if __name__== "__main__":
                      optimizer_params=None)
 
     group_kfold = GroupKFold(n_splits=5)
-    groups = pd.read_csv("ID_train.csv", index_col=0,
-                          names=["Sample ID", "Person ID"])
+    groups = data_reader.get_groups()
 
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
     scores = ae.cross_validate(data, groups, experiment=experiment)
