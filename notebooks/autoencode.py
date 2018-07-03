@@ -129,10 +129,7 @@ class Autoencoder:
 
     def cross_validate(self, data, groups, experiment,  n_splits=10, 
                        standardize=True, epochs=100):
-
-        #TODO: support both array and dataframe
-        data = data.values
-        #data = np.asarray(data)
+        data = np.asarray(data)
 
         kfold = GroupKFold(n_splits=n_splits)
 
@@ -178,51 +175,6 @@ class Autoencoder:
 
         return val_errors
 
-def my_cross_validate(clf, data, groups, experiment, n_splits=10, standardize=True, epochs=100):
-    data = data.values
-
-    group_kfold = GroupKFold(n_splits=n_splits)
-
-    val_losses = []
-    train_losses = []
-    val_errors = []
-
-    for i, (train_idx, val_idx) in enumerate(group_kfold.split(data, data, groups)):
-        comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
-        new_clf = clone(clf)
-
-        train_data = data[train_idx]
-        test_data = data[val_idx]
-        if standardize:
-            scaler = StandardScaler()
-            train_data = scaler.fit_transform(train_data)
-            test_data = scaler.transform(test_data)
-
-        history = new_clf.fit(train_data,
-                              epochs=epochs,
-                              validation_data=(test_data, test_data),
-                              callbacks=[comet_logger])
-
-        val_losses.append(comet_logger.val_loss)
-        train_losses.append(comet_logger.train_loss)
-        
-        predictions = new_clf.predict(test_data)
-        val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
-        val_errors.append(val_rmse)
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111) 
-
-    val_losses = np.array(val_losses)
-    train_losses = np.array(train_losses)
-    colors = sns.color_palette()
-    
-    plot_mean_std_loss(val_losses, np.array(comet_logger.val_steps), ax=ax, color=colors[0], legend="val")
-    plot_mean_std_loss(train_losses, np.array(comet_logger.train_steps), ax=ax, color=colors[1], legend="train")
-    experiment.log_figure("fig_test", fig)
-    fig.show()
-    return val_errors
-        
 def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
     """Plot mean and standard deviation of loss.
     
