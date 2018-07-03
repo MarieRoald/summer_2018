@@ -368,18 +368,7 @@ if __name__== "__main__":
     groups = pd.read_csv("ID_train.csv", index_col=0,
                           names=["Sample ID", "Person ID"])
 
-    scaler = StandardScaler()
-    clf = Pipeline(steps=[('standardscaler', scaler), ('autoencoder', ae)])
-    
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
-
-    """
-    scores = cross_validate(clf, data, data, groups=groups,
-                            scoring="neg_mean_squared_error",
-                            cv=group_kfold, return_train_score=True)
-
-    """
-    #scores = my_cross_validate(ae, data, groups, experiment=experiment)
     scores = ae.cross_validate(data, groups, experiment=experiment)
 
     print(scores)
