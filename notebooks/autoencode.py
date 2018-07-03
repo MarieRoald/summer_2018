@@ -27,11 +27,18 @@ class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
         """ """
+
+        self._input_params = {k: v for k, v in locals().items() if k != 'self'}
+
+        self._build(encoder_params, decoder_params, input_shape,
+                    latent_shape, optimizer_params=optimizer_params, loss=loss)
+
+    def _build(self, encoder_params, decoder_params, input_shape,
+               latent_shape, optimizer_params=None, loss="mean_squared_error"):
+        
         if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
             raise ValueError("Latent shape must be equal to the number of units"
                              " in the last layer of the encoder.")
-
-        self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
         encoder, decoder, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
@@ -43,6 +50,9 @@ class Autoencoder:
 
         self.optimizer = self._create_optimizer(optimizer_params)
         self.ae.compile(optimizer=self.optimizer, loss=loss)
+
+    def reset(self):
+        self._build(**self.get_params())
 
     def _create_optimizer(self, optimizer_params):
         """Creates a keras optimizer from dict containing the parameters"""
@@ -117,6 +127,102 @@ class Autoencoder:
 
         return layers
 
+    def cross_validate(self, data, groups, experiment,  n_splits=10, 
+                       standardize=True, epochs=100):
+
+        #TODO: support both array and dataframe
+        data = data.values
+        #data = np.asarray(data)
+
+        kfold = GroupKFold(n_splits=n_splits)
+
+        val_losses = []
+        train_losses = []
+        val_errors = []
+
+        for i, (train_idx, val_idx) in enumerate(kfold.split(data, data, groups)):
+            self.reset()
+
+            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
+            callbacks = [comet_logger]
+
+            train_data, val_data = data[train_idx], data[val_idx]
+
+            if standardize:
+                scaler = StandardScaler()
+                train_data = scaler.fit_transform(train_data)
+                test_data = scaler.transform(val_data)
+
+            history = ae.fit(train_data,
+                             epochs=epochs,
+                             validation_data=(test_data, test_data),
+                             callbacks=callbacks)
+
+            val_losses.append(comet_logger.val_loss)
+            train_losses.append(comet_logger.train_loss)
+            
+            predictions = ae.predict(test_data)
+            val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
+            val_errors.append(val_rmse)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111) 
+
+        val_losses = np.array(val_losses)
+        train_losses = np.array(train_losses)
+        colors = sns.color_palette()
+        
+        plot_mean_std_loss(val_losses, np.array(comet_logger.val_steps), ax=ax, color=colors[0], legend="val")
+        plot_mean_std_loss(train_losses, np.array(comet_logger.train_steps), ax=ax, color=colors[1], legend="train")
+        experiment.log_figure("Cross validation loss", fig)
+
+        return val_errors
+
+def my_cross_validate(clf, data, groups, experiment, n_splits=10, standardize=True, epochs=100):
+    data = data.values
+
+    group_kfold = GroupKFold(n_splits=n_splits)
+
+    val_losses = []
+    train_losses = []
+    val_errors = []
+
+    for i, (train_idx, val_idx) in enumerate(group_kfold.split(data, data, groups)):
+        comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
+        new_clf = clone(clf)
+
+        train_data = data[train_idx]
+        test_data = data[val_idx]
+        if standardize:
+            scaler = StandardScaler()
+            train_data = scaler.fit_transform(train_data)
+            test_data = scaler.transform(test_data)
+
+        history = new_clf.fit(train_data,
+                              epochs=epochs,
+                              validation_data=(test_data, test_data),
+                              callbacks=[comet_logger])
+
+        val_losses.append(comet_logger.val_loss)
+        train_losses.append(comet_logger.train_loss)
+        
+        predictions = new_clf.predict(test_data)
+        val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
+        val_errors.append(val_rmse)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111) 
+
+    val_losses = np.array(val_losses)
+    train_losses = np.array(train_losses)
+    colors = sns.color_palette()
+    
+    plot_mean_std_loss(val_losses, np.array(comet_logger.val_steps), ax=ax, color=colors[0], legend="val")
+    plot_mean_std_loss(train_losses, np.array(comet_logger.train_steps), ax=ax, color=colors[1], legend="train")
+    experiment.log_figure("fig_test", fig)
+    fig.show()
+    return val_errors
+        
 def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
     """Plot mean and standard deviation of loss.
     
@@ -166,51 +272,6 @@ def plot_mean_std_loss(loss, steps, color=None, legend="", ax=None):
 
     return fig
 
-def my_cross_validate(clf, data, groups, experiment, n_splits=10, standardize=True, epochs=100):
-    data = data.values
-
-    group_kfold = GroupKFold(n_splits=n_splits)
-
-    val_losses = []
-    train_losses = []
-    val_errors = []
-
-    for i, (train_index, test_index) in enumerate(group_kfold.split(data, data, groups)):
-        comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
-        new_clf = clone(clf)
-
-        train_data = data[train_index]
-        test_data = data[test_index]
-        if standardize:
-            scaler = StandardScaler()
-            train_data = scaler.fit_transform(train_data)
-            test_data = scaler.transform(test_data)
-
-        history = new_clf.fit(train_data,
-                              epochs=epochs,
-                              validation_data=(test_data, test_data),
-                              callbacks=[comet_logger])
-
-        val_losses.append(comet_logger.val_loss)
-        train_losses.append(comet_logger.train_loss)
-        
-        predictions = new_clf.predict(test_data)
-        val_rmse = np.sqrt(((predictions - test_data) ** 2).mean())
-        val_errors.append(val_rmse)
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111) 
-
-    val_losses = np.array(val_losses)
-    train_losses = np.array(train_losses)
-    colors = sns.color_palette()
-    
-    plot_mean_std_loss(val_losses, np.array(comet_logger.val_steps), ax=ax, color=colors[0], legend="val")
-    plot_mean_std_loss(train_losses, np.array(comet_logger.train_steps), ax=ax, color=colors[1], legend="train")
-    experiment.log_figure("fig_test", fig)
-    fig.show()
-    return val_errors
-        
 class GroupedCometLogger(keras.callbacks.Callback):
 
     def __init__(self, experiment, log_name):
@@ -300,6 +361,8 @@ if __name__== "__main__":
                      latent_shape=latent_shape,
                      loss="mean_squared_error",
                      optimizer_params=None)
+
+    ae.reset()
                      
     group_kfold = GroupKFold(n_splits=5)
     groups = pd.read_csv("ID_train.csv", index_col=0,
@@ -316,6 +379,7 @@ if __name__== "__main__":
                             cv=group_kfold, return_train_score=True)
 
     """
-    scores = my_cross_validate(ae, data, groups, experiment=experiment)
+    #scores = my_cross_validate(ae, data, groups, experiment=experiment)
+    scores = ae.cross_validate(data, groups, experiment=experiment)
 
     print(scores)
