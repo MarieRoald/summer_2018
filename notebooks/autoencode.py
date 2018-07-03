@@ -67,7 +67,7 @@ class Autoencoder:
                     "momentum": 0.9
                 }
             }
-
+        # TODO: check if kwargs exists
         optimizer_type = getattr(ko, optimizer_params["type"])
         optimizer = optimizer_type(**optimizer_params["kwargs"])
         return optimizer
@@ -153,7 +153,7 @@ class Autoencoder:
         plot_mean_std_loss(train_losses, train_steps, ax=ax, color=colors[1], legend="train")
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
-    def cross_validate(self, data, groups, experiment,  n_splits=10, 
+    def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
 
         data = np.asarray(data)
@@ -171,7 +171,7 @@ class Autoencoder:
             if standardize:
                 train_data, val_data, _ = self._standardize_data(train_data, val_data)
 
-            ae.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
+            self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
                    callbacks=[comet_logger])
 
             val_losses.append(comet_logger.val_loss)
@@ -242,11 +242,12 @@ if __name__== "__main__":
                      loss="mean_squared_error",
                      optimizer_params=None)
 
-    group_kfold = GroupKFold(n_splits=5)
     groups = data_reader.get_groups()
 
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
     experiment.log_parameter("Experiment name", "Cross validate test")
     scores = ae.cross_validate(data, groups, experiment=experiment)
+
+    ae.save("saved_model.h5")
 
     print(scores)
