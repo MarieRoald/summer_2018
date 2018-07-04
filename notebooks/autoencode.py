@@ -190,7 +190,7 @@ if __name__== "__main__":
     data = data_reader.get_all_data()
 
     input_shape = (data.shape[1],)
-    latent_shape = (100,)
+    latent_shape = (1000,)
 
     config = {
         "encoder": [
@@ -198,7 +198,19 @@ if __name__== "__main__":
                 "name": "hidden1_encoder",
                 "type": "Dense",
                 "kwargs": {
-                    "units": 200,
+                    "units": 2500,
+                    "activation": "relu"
+                },
+                "regularizer": {
+                    "type": "l1",
+                    "value": 1e-3
+                }
+            },
+            {
+                "name": "hidden2_encoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2000,
                     "activation": "relu"
                 },
                 "regularizer": {
@@ -211,16 +223,29 @@ if __name__== "__main__":
                 "type": "Dense",
                 "kwargs": {
                     "units": latent_shape[0],
-                    "activation": "relu"
+                    "activation": "linear"
+                },
+
+                "regularizer": {
+                    "type": "l1",
+                    "value": 1e-3
                 }
             }
         ],
         "decoder": [
             {
+                "name": "hidden2_decoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2000,
+                    "activation": "relu"
+                }
+            },
+            {
                 "name": "hidden1_decoder",
                 "type": "Dense",
                 "kwargs": {
-                    "units": 200,
+                    "units": 2500,
                     "activation": "relu"
                 }
             },
@@ -245,9 +270,9 @@ if __name__== "__main__":
     groups = data_reader.get_groups()
 
     experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
-    experiment.log_parameter("Experiment name", "Cross validate test")
-    scores = ae.cross_validate(data, groups, experiment=experiment)
+    experiment.log_parameter("Experiment name", "More layers and units test")
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000)
 
-    ae.save("saved_model.h5")
+    #ae.save("saved_model.h5")
 
     print(scores)

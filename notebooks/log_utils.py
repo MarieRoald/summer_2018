@@ -79,7 +79,7 @@ class GroupedCometLogger(keras.callbacks.Callback):
         logs = {} if logs is None else logs
         if "val_loss" in logs:
             self.experiment.log_metric(f"{self.log_name}_val_loss", 
-                                       logs.get('loss'), 
+                                       logs.get('val_loss'), 
                                        step=self.step_count)
             self.val_steps.append(self.step_count)
-            self.val_loss.append(logs.get("loss"))
+            self.val_loss.append(logs.get("val_loss"))

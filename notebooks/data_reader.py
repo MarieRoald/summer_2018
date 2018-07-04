@@ -19,6 +19,9 @@ class DataReader:
     def get_all_data(self):
         return pd.concat(self.dataframes, axis=1)
 
+    def get_seperate_data(self):
+        return self.dataframes
+
     def get_groups(self):
         return self.groups
 
