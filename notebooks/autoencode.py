@@ -3,6 +3,7 @@ import keras.layers as kl
 import keras.models as km
 import keras.regularizers as kr
 import keras.optimizers as ko
+import keras.callbacks as kc
 
 from keras import backend as K
 import keras
@@ -25,6 +26,11 @@ import seaborn as sns
 
 from log_utils import plot_mean_std_loss, GroupedCometLogger
 from data_reader import DataReader
+from sys import argv
+
+
+import json
+from pprint import pprint
 
 class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
@@ -38,7 +44,7 @@ class Autoencoder:
 
     def _build(self, encoder_params, decoder_params, input_shape,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
-        
+
         if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
             raise ValueError("Latent shape must be equal to the number of units"
                              " in the last layer of the encoder.")
@@ -62,9 +68,9 @@ class Autoencoder:
 
         if optimizer_params is None:
             optimizer_params = {
-                "type": "SGD",
+                "type": "adam",
                 "kwargs": {
-                    "momentum": 0.9
+
                 }
             }
         # TODO: check if kwargs exists
@@ -75,7 +81,7 @@ class Autoencoder:
     def fit(self, X, *args, **kwargs):
         """Trains a keras autoencoder model"""
 
-        self.ae.fit(X, X, **kwargs)
+        self.ae.fit(X, X, *args, **kwargs)
 
     def get_params(self, deep=False):
         return self._input_params
@@ -141,19 +147,27 @@ class Autoencoder:
         predictions = self.predict(val_data)
         val_rmse = np.sqrt(((predictions - val_data)**2).mean())
         return val_rmse
-    
+
     def _crossval_plots(self, train_losses, train_steps, val_losses, val_steps):
         fig = plt.figure()
-        ax = fig.add_subplot(111) 
+        ax = fig.add_subplot(111)
+
+        max_train_it = min(map(len, train_losses))
+        train_losses = [train_loss[:max_train_it] for train_loss in train_losses]
+        train_steps = train_steps[:max_train_it]
+
+        max_val_it = min(map(len, val_losses))
+        val_losses = [val_loss[:max_val_it] for val_loss in val_losses]
+        val_steps = val_steps[:max_val_it]
 
         val_losses = np.array(val_losses)
         train_losses = np.array(train_losses)
         colors = sns.color_palette()
-        
+
         plot_mean_std_loss(train_losses, train_steps, ax=ax, color=colors[1], legend="train")
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
-    def cross_validate(self, data, groups, experiment, n_splits=10, 
+    def cross_validate(self, data, groups, experiment, n_splits=10,
                        standardize=True, epochs=100):
 
         data = np.asarray(data)
@@ -172,13 +186,13 @@ class Autoencoder:
                 train_data, val_data, _ = self._standardize_data(train_data, val_data)
 
             self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
-                   callbacks=[comet_logger])
+                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=100)])
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
             val_errors.append(self._rmse(val_data))
 
-        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
+        fig = self._crossval_plots(train_losses, comet_logger.train_steps,
                                    val_losses, comet_logger.val_steps)
         experiment.log_figure("Cross validation loss", fig)
 
@@ -186,12 +200,22 @@ class Autoencoder:
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
+
+    config_filename = argv[1]
+    with open(config_filename) as f:
+        config = json.load(f)
+
+    pprint(config)
+
     data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
     data = data_reader.get_all_data()
 
     input_shape = (data.shape[1],)
-    latent_shape = (1000,)
+    # latent_shape = (100,)
+    latent_dim = config["encoder"][-1]["kwargs"]["units"]
+    latent_shape = (latent_dim,)
 
+    """
     config = {
         "encoder": [
             {
@@ -259,6 +283,7 @@ if __name__== "__main__":
             }
         ]
     }
+    """
 
     ae = Autoencoder(config["encoder"],
                      config["decoder"],
@@ -269,10 +294,14 @@ if __name__== "__main__":
 
     groups = data_reader.get_groups()
 
-    experiment = Experiment(project_name="comet test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
-    experiment.log_parameter("Experiment name", "More layers and units test")
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000)
+    experiment = Experiment(project_name="Concatenated autoencoder", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment.log_parameter("Experiment name", "Testing different layers")
+    experiment.log_parameter("Architecture file name", config_filename)
+    experiment.log_multiple_params(config)
+    experiment.log_parameter("Latent dim", latent_shape[0])
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4)
 
     #ae.save("saved_model.h5")
+    experiment.log_other("scores", scores)
 
     print(scores)
