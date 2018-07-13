@@ -1,0 +1,49 @@
+{
+    "decoder": [
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 1024
+            },
+            "name": "hidden1_decoder",
+            "type": "Dense"
+        },
+        {
+            "kwargs": {
+                "activation": "linear",
+                "units": 3048
+            },
+            "name": "output",
+            "type": "Dense"
+        }
+    ],
+    "encoder": [
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 1024
+            },
+            "name": "hidden1_encoder",
+            "type": "Dense"
+        },
+        {
+            "kwargs": {
+                "rate": 0
+            },
+            "name": "dropout",
+            "type": "Dropout"
+        },
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 32
+            },
+            "name": "latent",
+            "regularizer": {
+                "type": "l1",
+                "value": 0.0001
+            },
+            "type": "Dense"
+        }
+    ]
+}
