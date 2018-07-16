@@ -168,7 +168,7 @@ class Autoencoder:
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
     def cross_validate(self, data, groups, experiment, n_splits=10,
-                       standardize=True, epochs=100):
+                       standardize=True, epochs=100, log_prefix=""):
 
         data = np.asarray(data)
         kfold = GroupKFold(n_splits=n_splits)
@@ -180,13 +180,13 @@ class Autoencoder:
         for i, (train_idx, val_idx) in enumerate(kfold.split(data, data, groups)):
             self.reset()
             train_data, val_data = data[train_idx], data[val_idx]
-            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
+            comet_logger = GroupedCometLogger(experiment, f"{log_prefix}cv_fold_{i}")
 
             if standardize:
                 train_data, val_data, _ = self._standardize_data(train_data, val_data)
 
             self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
-                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=100)])
+                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
