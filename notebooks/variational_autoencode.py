@@ -43,10 +43,10 @@ class KLDivergenceLayer(Layer):
     def call(self, inputs):
         mu, log_var = inputs
 
-        kl_batch = -.5*K.sum(1 + log_var - 
+        kl_batch = 0*K.sum(1 + log_var - 
                              K.square(mu) - 
                              K.exp(log_var),
-                             axis=-2)
+                             axis=-1)
         self.add_loss(K.mean(kl_batch), inputs=inputs)
 
         return inputs
@@ -63,7 +63,7 @@ class VariationalAutoencoder(Autoencoder):
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
         self._build(encoder_params, decoder_params, input_shape,
-                    latent_shape, optimizer_params=optimizer_params, loss=nll)
+                    latent_shape, optimizer_params=optimizer_params, loss='mean_absolute_error')
 
     def _create_autoencoder(self, encoder_config, decoder_config,
                            input_shape=None, latent_shape=None):

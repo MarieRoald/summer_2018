@@ -2,6 +2,7 @@ from comet_ml import Experiment
 from keras.datasets import mnist
 import numpy as np
 from autoencode import Autoencoder
+from variational_autoencode import VariationalAutoencoder   
 import matplotlib.pyplot as plt
 
 if __name__== "__main__":
@@ -57,7 +58,7 @@ if __name__== "__main__":
                 "name": "latent",
                 "regularizer": {
                     "type": "l1",
-                    "value": 0.1
+                    "value": 0
                 },
                 "type": "Dense"
             }
@@ -71,6 +72,7 @@ if __name__== "__main__":
     print(latent_shape)
     print(input_shape)
 
+    """
     ae = Autoencoder(config["encoder"],
                      config["decoder"],
                      input_shape=input_shape,
@@ -78,10 +80,29 @@ if __name__== "__main__":
                      loss="mean_squared_error",
                      optimizer_params=None)
 
+    """
 
-    experiment = Experiment(api_key="ac4P1dtMEjJf1d9hIo9CIuSXC", project_name="mnist-autoencode")
-    # experiment = Experiment(project_name="MNIST test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
-    experiment.log_parameter("Experiment name", "Testing different layers")
+    optimizer_params = {
+        "type": "adam",
+        "kwargs": {
+            "lr": 0.0001
+        }
+    }
+    optimizer_params = {
+        "type": "rmsprop",
+        "kwargs": {
+        }
+    }
+    ae = VariationalAutoencoder(config["encoder"],
+                     config["decoder"],
+                     input_shape=input_shape,
+                     latent_shape=latent_shape,
+                     optimizer_params=optimizer_params)
+
+
+    #experiment = Experiment(api_key="ac4P1dtMEjJf1d9hIo9CIuSXC", project_name="mnist-autoencode")
+    experiment = Experiment(project_name="MNIST test", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment.log_parameter("Experiment name", "Testing vae")
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
 
