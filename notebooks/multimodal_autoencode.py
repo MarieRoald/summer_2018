@@ -14,6 +14,31 @@ from sys import argv
 
 import json
 
+class MultimodalBase(Autoencoder):
+
+    def _create_model(self, config, input_shape):
+        layers = self._create_layers(config)
+        model_input = kl.Input(shape=input_shape)
+        encoder = self._create_model_from_layers(input=model_input, layers=layers)
+        return encoder, model_input, layers
+
+    def _create_model_from_layers(self, input, layers):
+        output = self._stack_layers(input=input, layers=layers)
+        model = km.Model(inputs=input, outputs=output)
+        return model
+
+    def _stack_layers(self, input, layers):
+        current_output = layers[0](input)
+        for layer in layers[1:]:
+            current_output = layer(current_output)
+        return current_output
+
+    def _suffix_config_layer_names(self, config, suffix):
+        new_config = copy.deepcopy(config)
+        
+        for layer_config in new_config:
+            layer_config["name"] = layer_config["name"] + suffix
+        return new_config
 class MultimodalAutoencoder(Autoencoder):
 
     

@@ -1,6 +1,7 @@
 
 from comet_ml import Experiment
 from autoencode import Autoencoder
+from multimodal_autoencode import MultimodalBase
 import keras.models as km
 import keras.layers as kl
 import keras.callbacks as kc
@@ -27,11 +28,11 @@ class SharedEmbeddingLayer(Layer):
         reg = 0
         for ej in embeddings:
             for ei in embeddings:
-                reg += K.tf.norm(ej-ei)
-        #self.add_loss(self.gamma*reg)
+                reg += K.tf.losses.mean_squared_error(ej, ei)
+        self.add_loss(self.gamma*reg)
         return embeddings
 
-class SharedEmbeddingAutoencoder(Autoencoder):
+class SharedEmbeddingAutoencoder(MultimodalBase):
 
     def __init__(self, encoder_params, decoder_params, input_shapes,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
@@ -79,8 +80,7 @@ class SharedEmbeddingAutoencoder(Autoencoder):
 
         encoders = [] #shares architecture
         decoders = [] #shares architecture
-        autoencoders = [] #shares architecture 
-        
+        autoencoders = [] #shares architecturef"_decoder_{i}" 
 
         #TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
         #      men Autoencoder sin self.decoder_layers har det
@@ -90,27 +90,14 @@ class SharedEmbeddingAutoencoder(Autoencoder):
         #TODO: self decoder_layers of encoder layers har bare lagene til en model.
 
         #TODO: skal vi ha en liste med separate autoencoders?
-        for i, input_shape in enumerate(input_shapes):
-            current_encoder_config = copy.deepcopy(encoder_config)
-            
-            for layer_config in current_encoder_config:
-                layer_config["name"] = layer_config["name"] + f"_encoder_{i}" 
-
-            current_encoder, current_encoder_input, current_encoder_layers = self._create_model(current_encoder_config, input_shape)
-
-            encoders.append(current_encoder)
-            encoder_inputs.append(current_encoder_input)
-            
+        encoders, encoder_inputs = self._create_encoders(encoder_config, input_shapes)
 
         embeddings = [encoder.output for encoder in encoders]
-        embeddings = SharedEmbeddingLayer(gamma=0)(embeddings)
+        embeddings = SharedEmbeddingLayer(gamma=0.1)(embeddings)
 
         outputs = []
         for i, embedding in enumerate(embeddings):
-            current_decoder_config = copy.deepcopy(decoder_config)
-
-            for layer_config in current_decoder_config:
-                layer_config["name"] = layer_config["name"] + f"_decoder_{i}" 
+            current_decoder_config = self._suffix_config_layer_names(decoder_config, f"_decoder_{i}")
 
             # TODO: Dette må fikses
             current_decoder_config[-1]["kwargs"]["units"] = input_shapes[i][0]
@@ -124,6 +111,20 @@ class SharedEmbeddingAutoencoder(Autoencoder):
         combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=outputs)
 
         return encoders, decoders, autoencoders, combined_autoencoder
+
+    def _create_encoders(self, encoder_config, input_shapes):
+        encoders = []
+        encoder_inputs = []
+
+        for i, input_shape in enumerate(input_shapes):
+            config = self._suffix_config_layer_names(encoder_config, f"_encoder_{i}")
+            encoder, input, layers = self._create_model(config, input_shape)
+
+            encoders.append(encoder)
+            encoder_inputs.append(input)
+            
+        return encoders, encoder_inputs
+    
 
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
@@ -165,22 +166,6 @@ class SharedEmbeddingAutoencoder(Autoencoder):
 
         return val_errors
 
-    def _create_model(self, config, input_shape):
-        layers = self._create_layers(config)
-        model_input = kl.Input(shape=input_shape)
-        encoder = self._create_model_from_layers(input=model_input, layers=layers)
-        return encoder, model_input, layers
-
-    def _create_model_from_layers(self, input, layers):
-        output = self._stack_layers(input=input, layers=layers)
-        model = km.Model(inputs=input, outputs=output)
-        return model
-
-    def _stack_layers(self, input, layers):
-        current_output = layers[0](input)
-        for layer in layers[1:]:
-            current_output = layer(current_output)
-        return current_output
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
