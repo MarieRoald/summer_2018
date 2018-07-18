@@ -1,8 +1,11 @@
+
 from comet_ml import Experiment
 from autoencode import Autoencoder
 import keras.models as km
 import keras.layers as kl
 import keras.callbacks as kc
+from keras import backend as K
+from keras.engine.topology import Layer
 from log_utils import plot_mean_std_loss, GroupedCometLogger
 from data_reader import DataReader
 import copy
@@ -11,12 +14,21 @@ from sklearn.model_selection import GroupKFold
 
 from sys import argv
 
-
 import json
 
-class MultimodalAutoencoder(Autoencoder):
 
-    
+class SharedEmbeddingLayer(Layer):
+    def __init__(self, gamma, *args, **kwargs):
+        self.gamma = gamma
+        self.is_placeholder = True
+        super(SharedEmbeddingLayer, self).__init__(*args, **kwargs)
+
+    def call(self, embeddings):
+        return embeddings
+
+
+class SharedEmbeddingAutoencoder(Autoencoder):
+
     def __init__(self, encoder_params, decoder_params, input_shapes,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
         """ """
@@ -33,74 +45,105 @@ class MultimodalAutoencoder(Autoencoder):
             raise ValueError("Latent shape must be equal to the number of units"
                              " in the last layer of the encoder.")
 
-        encoder, decoder, single_modal_aes, ae = self._create_autoencoder(encoder_params,
+        encoders, decoders, aes, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
                                                        input_shapes,
                                                        latent_shape)
-        self.encoder = encoder
-        self.decoder = decoder
+        self.encoders = encoders
+        self.decoders = decoders
+        self.aes = aes
         self.ae = ae
-        self.single_modal_aes = single_modal_aes
 
         self.optimizer = self._create_optimizer(optimizer_params)
         self.ae.compile(optimizer=self.optimizer, loss=loss)
 
-    def fit(self, X, *args, **kwargs):
-        """Trains a keras autoencoder model
-        
-        Parameters
-        ----------
-        X : List of numpy arrays.
-        """
-        self.ae.fit(x=X, y=[np.concatenate(X,1)]*3, **kwargs)
-
-    def _join_dataset(self,X):
-        return np.concatenate(X,1)
-
-    def _create_output(self,X):
-        n = len(X)
-        return [self._join_dataset(X)]*n
+    def _rmse(self, val_data):
+        predictions = self.predict(val_data)
+        val_rmse = []
+        for p, vd in zip(predictions, val_data):
+            val_rmse.append(np.sqrt(np.mean((p-vd)**2)))
+        return val_rmse
 
     def _create_autoencoder(self, encoder_config, decoder_config, input_shapes, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
         # TODO: skal jeg kunne ta inn en liste med input og output navn?
         encoder_layers = []
         encoder_inputs = []
-        encoders = [] #shares architecture
-        autoencoders = [] #shares architecture and decoder weights
         
-        decoder, decoder_input, self.decoder_layers = self._create_model(decoder_config, latent_shape)
+        decoder_layers = []
+        decoder_inputs = [] # unødvendig?
+
+        encoders = [] #shares architecture
+        decoders = [] #shares architecture
+        autoencoders = [] #shares architecture 
+        
 
         #TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
         #      men Autoencoder sin self.decoder_layers har det
+
+        #TODO: hva gjør jeg med decoderene?
+
+        #TODO: self decoder_layers of encoder layers har bare lagene til en model.
+
         for i, input_shape in enumerate(input_shapes):
             
             current_encoder_config = copy.deepcopy(encoder_config)
             
-            for layer_config in encoder_config:
+            for layer_config in current_encoder_config:
                 layer_config["name"] = layer_config["name"] + f"_encoder_{i}" 
 
-            current_encoder, current_input, current_encoder_layers = self._create_model(current_encoder_config, input_shape)
 
-            encoder_inputs.append(current_input)
-            encoder_layers.append(current_encoder_layers)
+            current_encoder, current_encoder_input, current_encoder_layers = self._create_model(current_encoder_config, input_shape)
+
             encoders.append(current_encoder)
-
-            current_autoencoder_layers = current_encoder_layers+self.decoder_layers
-            current_autoencoder = self._create_model_from_layers(input=current_input, layers=current_autoencoder_layers)
-            autoencoders.append(current_autoencoder)
-
-        outputs = [autoencoder.output for autoencoder in autoencoders]
+            encoder_inputs.append(current_encoder_input)
             
+
+        embeddings = [encoder.output for encoder in encoders]
+        sharedembeddinglayer = SharedEmbeddingLayer(gamma=1)
+        print(embeddings)
+        embeddings = sharedembeddinglayer(embeddings)
+        #from ipdb import set_trace; set_trace()
+        #TODO: skal vi ha en liste med separate autoencoders?
+
+        outputs = []
+        for i, embedding in enumerate(embeddings):
+
+            current_decoder_config = copy.deepcopy(decoder_config)
+
+            for layer_config in current_decoder_config:
+                layer_config["name"] = layer_config["name"] + f"_decoder_{i}" 
+
+            # TODO: Dette må fikses
+            current_decoder_config[-1]["kwargs"]["units"] = input_shapes[i][0]
+
+            current_decoder, current_decoder_input, current_decoder_layers = self._create_model(current_decoder_config, latent_shape)
+
+            decoders.append(current_decoder)
+            #current_autoencoder_layers = current_encoder_layers+self.decoder_layers
+
+            print(current_decoder_layers)
+
+            current_layer = current_decoder_layers[0](embedding)
+            for layer in current_decoder_layers[1:]:
+                current_layer = layer(current_layer)
+
+            outputs.append(current_layer)
+            print(i)
+            print(encoder_inputs)
+            print(embeddings)
+
         combined_autoencoder = km.Model(input=encoder_inputs, outputs=outputs)
 
-        self.encoder_layers = encoder_layers
-        return encoders, decoder, autoencoders, combined_autoencoder
+        return encoders, decoders, autoencoders, combined_autoencoder
 
-    def _rmse(self, val_data):
-        predictions = self.predict(val_data)
-        val_rmse = np.sqrt(((self._join_dataset(predictions) - self._join_dataset(self._create_output(val_data)))**2).mean())
-        return val_rmse
+
+
+    def fit(self, X, *args, **kwargs):
+        """Trains a keras autoencoder model"""
+
+        self.ae.fit(x=X, y=X, *args, **kwargs)
+
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
 
@@ -131,9 +174,7 @@ class MultimodalAutoencoder(Autoencoder):
                 val_data_scaled.append(vd_scaled)
 
             train_data, val_data = train_data_scaled, val_data_scaled
-            self.fit(train_data, epochs=epochs, validation_data=(val_data, self._create_output(val_data)),
-
-                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+            self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data), callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
@@ -181,7 +222,7 @@ if __name__== "__main__":
     input_shapes = [(d.shape[1],) for d in data]
 
 
-    ae = MultimodalAutoencoder(config["encoder"],
+    ae = SharedEmbeddingAutoencoder(config["encoder"],
                      config["decoder"],
                      input_shapes=input_shapes,
                      latent_shape=latent_shape,
@@ -190,8 +231,8 @@ if __name__== "__main__":
 
     groups = data_reader.get_groups()
 
-    experiment = Experiment(project_name="Multimodal Autoencoder", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
-    experiment.log_parameter("Experiment name", "multimodal test")
+    experiment = Experiment(project_name="Shared Embedding Autoencoder", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
+    experiment.log_parameter("Experiment name", "shared embedding test")
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
