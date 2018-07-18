@@ -17,6 +17,14 @@ from sys import argv
 
 import json
 
+#TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
+#      men Autoencoder sin self.decoder_layers har det
+
+#TODO: hva gjør jeg med decoderene?
+
+#TODO: self decoder_layers of encoder layers har bare lagene til en model.
+
+#TODO: skal vi ha en liste med separate autoencoders?
 
 class SharedEmbeddingLayer(Layer):
     def __init__(self, gamma, *args, **kwargs):
@@ -50,13 +58,12 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
             raise ValueError("Latent shape must be equal to the number of units"
                              " in the last layer of the encoder.")
 
-        encoders, decoders, aes, ae = self._create_autoencoder(encoder_params,
+        encoders, decoders, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
                                                        input_shapes,
                                                        latent_shape)
         self.encoders = encoders
         self.decoders = decoders
-        self.aes = aes
         self.ae = ae
 
         self.optimizer = self._create_optimizer(optimizer_params)
@@ -71,46 +78,17 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
 
     def _create_autoencoder(self, encoder_config, decoder_config, input_shapes, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
-        # TODO: skal jeg kunne ta inn en liste med input og output navn?
-        encoder_layers = []
-        encoder_inputs = []
-        
-        decoder_layers = []
-        decoder_inputs = [] # unødvendig?
 
-        encoders = [] #shares architecture
-        decoders = [] #shares architecture
-        autoencoders = [] #shares architecturef"_decoder_{i}" 
-
-        #TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
-        #      men Autoencoder sin self.decoder_layers har det
-
-        #TODO: hva gjør jeg med decoderene?
-
-        #TODO: self decoder_layers of encoder layers har bare lagene til en model.
-
-        #TODO: skal vi ha en liste med separate autoencoders?
         encoders, encoder_inputs = self._create_encoders(encoder_config, input_shapes)
 
         embeddings = [encoder.output for encoder in encoders]
         embeddings = SharedEmbeddingLayer(gamma=0.1)(embeddings)
 
-        outputs = []
-        for i, embedding in enumerate(embeddings):
-            current_decoder_config = self._suffix_config_layer_names(decoder_config, f"_decoder_{i}")
+        decoders, decoder_outputs = self._create_decoders(decoder_config, input_shapes, embeddings)
 
-            # TODO: Dette må fikses
-            current_decoder_config[-1]["kwargs"]["units"] = input_shapes[i][0]
-            current_decoder, current_decoder_input, current_decoder_layers = self._create_model(current_decoder_config, latent_shape)
+        combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=decoder_outputs)
 
-            output = self._stack_layers(input=embedding, layers=current_decoder_layers)
-
-            decoders.append(current_decoder)
-            outputs.append(output)
-
-        combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=outputs)
-
-        return encoders, decoders, autoencoders, combined_autoencoder
+        return encoders, decoders, combined_autoencoder
 
     def _create_encoders(self, encoder_config, input_shapes):
         encoders = []
@@ -124,7 +102,22 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
             encoder_inputs.append(input)
             
         return encoders, encoder_inputs
-    
+
+    def _create_decoders(self, decoder_config, input_shapes, embeddings):
+        decoders = []
+        decoder_outputs = []
+        for i, embedding in enumerate(embeddings):
+            config = self._suffix_config_layer_names(decoder_config, f"_decoder_{i}")
+
+            # TODO: Dette må fikses
+            config[-1]["kwargs"]["units"] = input_shapes[i][0]
+            current_decoder, current_decoder_input, current_decoder_layers = self._create_model(config, latent_shape)
+
+            output = self._stack_layers(input=embedding, layers=current_decoder_layers)
+
+            decoders.append(current_decoder)
+            decoder_outputs.append(output)
+        return decoders, decoder_outputs
 
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
