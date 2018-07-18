@@ -24,8 +24,12 @@ class SharedEmbeddingLayer(Layer):
         super(SharedEmbeddingLayer, self).__init__(*args, **kwargs)
 
     def call(self, embeddings):
+        reg = 0
+        for ej in embeddings:
+            for ei in embeddings:
+                reg += K.tf.norm(ej-ei)
+        #self.add_loss(self.gamma*reg)
         return embeddings
-
 
 class SharedEmbeddingAutoencoder(Autoencoder):
 
@@ -85,13 +89,12 @@ class SharedEmbeddingAutoencoder(Autoencoder):
 
         #TODO: self decoder_layers of encoder layers har bare lagene til en model.
 
+        #TODO: skal vi ha en liste med separate autoencoders?
         for i, input_shape in enumerate(input_shapes):
-            
             current_encoder_config = copy.deepcopy(encoder_config)
             
             for layer_config in current_encoder_config:
                 layer_config["name"] = layer_config["name"] + f"_encoder_{i}" 
-
 
             current_encoder, current_encoder_input, current_encoder_layers = self._create_model(current_encoder_config, input_shape)
 
@@ -100,15 +103,10 @@ class SharedEmbeddingAutoencoder(Autoencoder):
             
 
         embeddings = [encoder.output for encoder in encoders]
-        sharedembeddinglayer = SharedEmbeddingLayer(gamma=1)
-        print(embeddings)
-        embeddings = sharedembeddinglayer(embeddings)
-        #from ipdb import set_trace; set_trace()
-        #TODO: skal vi ha en liste med separate autoencoders?
+        embeddings = SharedEmbeddingLayer(gamma=0)(embeddings)
 
         outputs = []
         for i, embedding in enumerate(embeddings):
-
             current_decoder_config = copy.deepcopy(decoder_config)
 
             for layer_config in current_decoder_config:
@@ -116,33 +114,16 @@ class SharedEmbeddingAutoencoder(Autoencoder):
 
             # TODO: Dette må fikses
             current_decoder_config[-1]["kwargs"]["units"] = input_shapes[i][0]
-
             current_decoder, current_decoder_input, current_decoder_layers = self._create_model(current_decoder_config, latent_shape)
 
+            output = self._stack_layers(input=embedding, layers=current_decoder_layers)
+
             decoders.append(current_decoder)
-            #current_autoencoder_layers = current_encoder_layers+self.decoder_layers
+            outputs.append(output)
 
-            print(current_decoder_layers)
-
-            current_layer = current_decoder_layers[0](embedding)
-            for layer in current_decoder_layers[1:]:
-                current_layer = layer(current_layer)
-
-            outputs.append(current_layer)
-            print(i)
-            print(encoder_inputs)
-            print(embeddings)
-
-        combined_autoencoder = km.Model(input=encoder_inputs, outputs=outputs)
+        combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=outputs)
 
         return encoders, decoders, autoencoders, combined_autoencoder
-
-
-
-    def fit(self, X, *args, **kwargs):
-        """Trains a keras autoencoder model"""
-
-        self.ae.fit(x=X, y=X, *args, **kwargs)
 
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
@@ -153,12 +134,10 @@ class SharedEmbeddingAutoencoder(Autoencoder):
         val_losses = []
         train_losses = []
 
-        print(data[0])
         val_errors = []
 
         for i, (train_idx, val_idx) in enumerate(kfold.split(data[0], data[0], groups)):
             self.reset()
-            print(train_idx)
             train_data = [d[train_idx] for d in data]
             val_data = [d[val_idx] for d in data]
             comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
@@ -192,18 +171,16 @@ class SharedEmbeddingAutoencoder(Autoencoder):
         encoder = self._create_model_from_layers(input=model_input, layers=layers)
         return encoder, model_input, layers
 
-    def _stack_layers(self, layers):
-        current_input_layer = layers[0]
-        for layer in layers[1:]:
-            current_input_layer = layer(current_input_layer)
-
     def _create_model_from_layers(self, input, layers):
-        current_input_layer = layers[0](input)
-        for layer in layers[1:]:
-            current_input_layer = layer(current_input_layer)
-
-        model = km.Model(inputs=input, outputs=current_input_layer)
+        output = self._stack_layers(input=input, layers=layers)
+        model = km.Model(inputs=input, outputs=output)
         return model
+
+    def _stack_layers(self, input, layers):
+        current_output = layers[0](input)
+        for layer in layers[1:]:
+            current_output = layer(current_output)
+        return current_output
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
@@ -218,9 +195,7 @@ if __name__== "__main__":
     latent_dim = config["encoder"][-1]["kwargs"]["units"]
     latent_shape = (latent_dim,)
 
-
     input_shapes = [(d.shape[1],) for d in data]
-
 
     ae = SharedEmbeddingAutoencoder(config["encoder"],
                      config["decoder"],
