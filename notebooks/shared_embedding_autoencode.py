@@ -34,14 +34,38 @@ class SharedEmbeddingLayer(Layer):
 
 class SharedEmbeddingAutoencoder(MultimodalBase):
 
+    def _check_encoder_params(self, encoder_params, latent_shape):
+        if "kwargs" in encoder_params[-1]:
+            if "units" in encoder_params[-1]["kwargs"]:
+                if encoder_params[-1]["kwargs"]["units"] is None:
+                    encoder_params[-1]["kwargs"]["units"] = latent_shape[0]
+
+                if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
+                    raise ValueError("Latent shape must be None or equal to the number of units"
+                                     " in the last layer of the encoder.")
+        else:
+            encoder_params[-1]["kwargs"] = {}
+
+        return encoder_params
+
+    def _check_decoder_params(self, decoder_params, input_shapes):
+        if "kwargs" in decoder_params[-1]:
+            if "units" in decoder_params[-1]["kwargs"] \
+            and decoder_params[-1]["kwargs"]["units"] is not None:
+                raise ValueError("Decoder output of final layer must be None"
+                                 " (it is automatically set to be identical"
+                                 " to the input shape of the encoder)")
+        else:
+            decoder_params[-1]["kwargs"] = {}
+
     def _build(self, encoder_params, decoder_params, input_shapes,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
         
-        if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
-            raise ValueError("Latent shape must be equal to the number of units"
-                             " in the last layer of the encoder.")
-        if decoder_params == None:
+        self._check_encoder_params(encoder_params, latent_shape)
+        if decoder_params is None:
             decoder_params = self._create_decoder_parameters_from_encoder(encoder_params, output_dim=None)
+        else:
+            self._check_decoder_params(decoder_params, input_shapes)
 
         encoder_params = self._create_n_encoder_dicts(encoder_params, n=len(input_shapes))
         decoder_params = self._create_n_decoder_dicts(decoder_params, output_shapes=input_shapes)
@@ -57,21 +81,6 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
         self.optimizer = self._create_optimizer(optimizer_params)
         self.ae.compile(optimizer=self.optimizer, loss=loss)
 
-    def _create_n_encoder_dicts(self, encoder_params, n):
-        encoder_params_list = []
-        for i in range(n):
-            config = self._suffix_config_layer_names(encoder_params, f"_encoder_{i}")
-            encoder_params_list.append(config)
-        return encoder_params_list
-
-    def _create_n_decoder_dicts(self, decoder_params, output_shapes):
-        decoder_params_list = []
-        for i, output_shape in enumerate(output_shapes):
-            config = self._suffix_config_layer_names(decoder_params, f"_decoder_{i}")
-            config[-1]["kwargs"]["units"] = output_shape[0]
-            decoder_params_list.append(config)
-        return decoder_params_list
-
     def _rmse(self, val_data):
         predictions = self.predict(val_data)
         val_rmse = []
@@ -82,7 +91,6 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
     def _create_autoencoder(self, encoder_params, decoder_config, input_shapes, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
 
-        #self._create_decoder_parameters_from_encoder(encoder_config, input_shapes[0])
         encoders, encoder_inputs = self._create_encoders(encoder_params, input_shapes)
 
         embeddings = [encoder.output for encoder in encoders]
@@ -93,27 +101,6 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
 
         return encoders, decoders, combined_autoencoder
 
-    def _create_encoders(self, encoder_params, input_shapes):
-        encoders = []
-        encoder_inputs = []
-
-        for params, shape in zip(encoder_params, input_shapes):
-            encoder, input, layers = self._create_model(params, shape)
-            encoders.append(encoder)
-            encoder_inputs.append(input)
-            
-        return encoders, encoder_inputs
-    def _create_decoders(self, decoder_params, latent_shape, embeddings):
-        decoders = []
-        decoder_outputs = []
-        for params, embedding in zip(decoder_params, embeddings):
-            decoder, input, layers = self._create_model(params, latent_shape)
-            output = self._stack_layers(input=embedding, layers=layers)
-
-            decoders.append(decoder)
-            decoder_outputs.append(output)
-
-        return decoders, decoder_outputs
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
 
@@ -196,7 +183,7 @@ if __name__== "__main__":
                 "name": "latent",
                 "type": "Dense",
                 "kwargs": {
-                    "units": 32,
+                    "units": None,
                     "activation": "linear"
                 },
 
@@ -208,13 +195,82 @@ if __name__== "__main__":
         ]
     }
 
+
+    config = {
+        "encoder": [
+            {
+                "name": "hidden1_encoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2500,
+                    "activation": "relu"
+                },
+                "regularizer": {
+                    "type": "l1",
+                    "value": 1e-3
+                }
+            },
+            {
+                "name": "hidden2_encoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2000,
+                    "activation": "relu"
+                },
+                "regularizer": {
+                    "type": "l1",
+                    "value": 1e-3
+                }
+            },
+            {
+                "name": "latent",
+                "type": "Dense",
+                "kwargs": {
+                    "units": None,
+                    "activation": "linear"
+                },
+
+                "regularizer": {
+                    "type": "l1",
+                    "value": 1e-3
+                }
+            }
+        ],
+        "decoder": [
+            {
+                "name": "hidden2_decoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2000,
+                    "activation": "relu"
+                }
+            },
+            {
+                "name": "hidden1_decoder",
+                "type": "Dense",
+                "kwargs": {
+                    "units": 2500,
+                    "activation": "relu"
+                }
+            },
+            {
+                "name": "output",
+                "type": "Dense",
+                "kwargs": {
+                    "units": None,
+                    "activation": "linear"
+                }
+            }
+        ]
+    }
     latent_dim = config["encoder"][-1]["kwargs"]["units"]
+    latent_dim = 8
     latent_shape = (latent_dim,)
 
     input_shapes = [(d.shape[1],) for d in data]
 
     ae = SharedEmbeddingAutoencoder(config["encoder"],
-                     None,
+                     config["decoder"],
                      input_shapes=input_shapes,
                      latent_shape=latent_shape,
                      loss="mean_squared_error",

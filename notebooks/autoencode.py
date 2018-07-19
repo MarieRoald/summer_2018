@@ -61,6 +61,20 @@ class Autoencoder:
         self.optimizer = self._create_optimizer(optimizer_params)
         self.ae.compile(optimizer=self.optimizer, loss=loss)
 
+    def _check_encoder_params(self, encoder_params, latent_shape):
+        if "kwargs" in encoder_params[-1]:
+            if "units" in encoder_params[-1]["kwargs"]:
+                if encoder_params[-1]["kwargs"]["units"] is None:
+                    encoder_params[-1]["kwargs"]["units"] = latent_shape[0]
+
+                if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
+                    raise ValueError("Latent shape must be None or equal to the number of units"
+                                     " in the last layer of the encoder.")
+        else:
+            encoder_params[-1]["kwargs"] = {}
+
+        return encoder_params
+
     def reset(self):
         self._build(**self.get_params())
 
@@ -70,13 +84,10 @@ class Autoencoder:
         if optimizer_params is None:
             optimizer_params = {
                 "type": "adam",
-                "kwargs": {
-
-                }
             }
-        # TODO: check if kwargs exists
+            
         optimizer_type = getattr(ko, optimizer_params["type"])
-        optimizer = optimizer_type(**optimizer_params["kwargs"])
+        optimizer = optimizer_type(**optimizer_params.get("kwargs",{}))
         return optimizer
 
     def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None):

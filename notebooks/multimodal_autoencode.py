@@ -49,6 +49,43 @@ class MultimodalBase(Autoencoder):
         self._build(encoder_params, decoder_params, input_shapes,
                     latent_shape, optimizer_params=optimizer_params, loss=loss)
 
+    def _create_n_encoder_dicts(self, encoder_params, n):
+        encoder_params_list = []
+        for i in range(n):
+            config = self._suffix_config_layer_names(encoder_params, f"_encoder_{i}")
+            encoder_params_list.append(config)
+        return encoder_params_list
+
+    def _create_n_decoder_dicts(self, decoder_params, output_shapes):
+        decoder_params_list = []
+        for i, output_shape in enumerate(output_shapes):
+            config = self._suffix_config_layer_names(decoder_params, f"_decoder_{i}")
+            config[-1]["kwargs"]["units"] = output_shape[0]
+            decoder_params_list.append(config)
+        return decoder_params_list
+
+    def _create_encoders(self, encoder_params, input_shapes):
+        encoders = []
+        encoder_inputs = []
+
+        for params, shape in zip(encoder_params, input_shapes):
+            encoder, input, layers = self._create_model(params, shape)
+            encoders.append(encoder)
+            encoder_inputs.append(input)
+        return encoders, encoder_inputs
+
+    def _create_decoders(self, decoder_params, latent_shape, embeddings):
+        decoders = []
+        decoder_outputs = []
+        for params, embedding in zip(decoder_params, embeddings):
+            decoder, input, layers = self._create_model(params, latent_shape)
+            output = self._stack_layers(input=embedding, layers=layers)
+
+            decoders.append(decoder)
+            decoder_outputs.append(output)
+        return decoders, decoder_outputs
+
+    
 class MultimodalAutoencoder(MultimodalBase):
     
     def _build(self, encoder_params, decoder_params, input_shapes,
