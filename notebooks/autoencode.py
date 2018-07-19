@@ -79,7 +79,7 @@ class Autoencoder:
         optimizer = optimizer_type(**optimizer_params["kwargs"])
         return optimizer
 
-    def _create_decoder_parameters_from_encoder(self, encoder_config, input_shape):
+    def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None):
 
         decoder_config = copy.deepcopy(encoder_config)
         decoder_config = [l for l in decoder_config[-2::-1] if l["type"] != "Dropout"]
@@ -88,7 +88,7 @@ class Autoencoder:
                 "name": "output",
                 "type": "Dense",
                 "kwargs": {
-                    "units": input_shape[0],
+                    "units": output_dim,
                     "activation": "linear"
                 }
         }

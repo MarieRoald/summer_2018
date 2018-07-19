@@ -13,7 +13,7 @@ from sys import argv
 
 
 import json
-
+from pprint import pprint
 class MultimodalBase(Autoencoder):
 
     def _create_model(self, config, input_shape):
@@ -35,13 +35,11 @@ class MultimodalBase(Autoencoder):
 
     def _suffix_config_layer_names(self, config, suffix):
         new_config = copy.deepcopy(config)
-        
+
         for layer_config in new_config:
             layer_config["name"] = layer_config["name"] + suffix
         return new_config
 
-class MultimodalAutoencoder(Autoencoder):
-    
     def __init__(self, encoder_params, decoder_params, input_shapes,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
         """ """
@@ -51,6 +49,8 @@ class MultimodalAutoencoder(Autoencoder):
         self._build(encoder_params, decoder_params, input_shapes,
                     latent_shape, optimizer_params=optimizer_params, loss=loss)
 
+class MultimodalAutoencoder(MultimodalBase):
+    
     def _build(self, encoder_params, decoder_params, input_shapes,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
         
