@@ -91,9 +91,8 @@ class MultimodalAutoencoder(MultimodalBase):
     def _build(self, encoder_params, decoder_params, input_shapes,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
         
-        if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
-            raise ValueError("Latent shape must be equal to the number of units"
-                             " in the last layer of the encoder.")
+        self._check_encoder_params(encoder_params, latent_shape)
+        encoder_params = self._create_n_encoder_dicts(encoder_params, n=len(input_shapes))
 
         encoder, decoder, single_modal_aes, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
@@ -114,7 +113,7 @@ class MultimodalAutoencoder(MultimodalBase):
         ----------
         X : List of numpy arrays.
         """
-        self.ae.fit(x=X, y=[np.concatenate(X,1)]*3, **kwargs)
+        self.ae.fit(x=X, y=self._create_output(X), **kwargs)
 
     def _join_dataset(self,X):
         return np.concatenate(X,1)
@@ -123,46 +122,33 @@ class MultimodalAutoencoder(MultimodalBase):
         n = len(X)
         return [self._join_dataset(X)]*n
 
-    def _create_autoencoder(self, encoder_config, decoder_config, input_shapes, latent_shape):
+    def _create_autoencoder(self, encoder_params, decoder_params, input_shapes, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
-        # TODO: skal jeg kunne ta inn en liste med input og output navn?
-        encoder_layers = []
         encoder_inputs = []
         encoders = [] #shares architecture
         autoencoders = [] #shares architecture and decoder weights
         
-        decoder, decoder_input, self.decoder_layers = self._create_model(decoder_config, latent_shape)
+        decoder, _, decoder_layers = self._create_model(decoder_params, latent_shape)
 
-        #TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
-        #      men Autoencoder sin self.decoder_layers har det
-        for i, input_shape in enumerate(input_shapes):
-            
-            current_encoder_config = copy.deepcopy(encoder_config)
-            
-            for layer_config in encoder_config:
-                layer_config["name"] = layer_config["name"] + f"_encoder_{i}" 
+        for params, input_shape in zip(encoder_params, input_shapes):
+            encoder, input, encoder_layers = self._create_model(params, input_shape)
 
-            current_encoder, current_input, current_encoder_layers = self._create_model(current_encoder_config, input_shape)
+            autoencoder = self._create_model_from_layers(input=input, layers=encoder_layers+decoder_layers)
 
-            encoder_inputs.append(current_input)
-            encoder_layers.append(current_encoder_layers)
-            encoders.append(current_encoder)
-
-            current_autoencoder_layers = current_encoder_layers+self.decoder_layers
-            current_autoencoder = self._create_model_from_layers(input=current_input, layers=current_autoencoder_layers)
-            autoencoders.append(current_autoencoder)
+            encoder_inputs.append(input)
+            encoders.append(encoder)
+            autoencoders.append(autoencoder)
 
         outputs = [autoencoder.output for autoencoder in autoencoders]
-            
-        combined_autoencoder = km.Model(input=encoder_inputs, outputs=outputs)
+        combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=outputs)
 
-        self.encoder_layers = encoder_layers
         return encoders, decoder, autoencoders, combined_autoencoder
 
     def _rmse(self, val_data):
         predictions = self.predict(val_data)
         val_rmse = np.sqrt(((self._join_dataset(predictions) - self._join_dataset(self._create_output(val_data)))**2).mean())
         return val_rmse
+
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
 
@@ -207,11 +193,7 @@ class MultimodalAutoencoder(MultimodalBase):
 
         return val_errors
 
-    def _create_model(self, config, input_shape):
-        layers = self._create_layers(config)
-        model_input = kl.Input(shape=input_shape)
-        encoder = self._create_model_from_layers(input=model_input, layers=layers)
-        return encoder, model_input, layers
+
 
     def _stack_layers(self, layers):
         current_input_layer = layers[0]

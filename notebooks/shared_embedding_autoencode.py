@@ -34,20 +34,6 @@ class SharedEmbeddingLayer(Layer):
 
 class SharedEmbeddingAutoencoder(MultimodalBase):
 
-    def _check_encoder_params(self, encoder_params, latent_shape):
-        if "kwargs" in encoder_params[-1]:
-            if "units" in encoder_params[-1]["kwargs"]:
-                if encoder_params[-1]["kwargs"]["units"] is None:
-                    encoder_params[-1]["kwargs"]["units"] = latent_shape[0]
-
-                if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
-                    raise ValueError("Latent shape must be None or equal to the number of units"
-                                     " in the last layer of the encoder.")
-        else:
-            encoder_params[-1]["kwargs"] = {}
-
-        return encoder_params
-
     def _check_decoder_params(self, decoder_params, input_shapes):
         if "kwargs" in decoder_params[-1]:
             if "units" in decoder_params[-1]["kwargs"] \
@@ -109,7 +95,6 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
 
         val_losses = []
         train_losses = []
-
         val_errors = []
 
         for i, (train_idx, val_idx) in enumerate(kfold.split(data[0], data[0], groups)):
