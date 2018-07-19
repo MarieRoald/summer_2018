@@ -12,6 +12,7 @@ from data_reader import DataReader
 import copy
 import numpy as np
 from sklearn.model_selection import GroupKFold
+from pprint import pprint
 
 from sys import argv
 
@@ -19,8 +20,6 @@ import json
 
 #TODO: kanskje litt merkelig at self.decoder_layers ikke har input lag,
 #      men Autoencoder sin self.decoder_layers har det
-
-#TODO: hva gjør jeg med decoderene?
 
 #TODO: self decoder_layers of encoder layers har bare lagene til en model.
 
@@ -57,7 +56,9 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
         if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
             raise ValueError("Latent shape must be equal to the number of units"
                              " in the last layer of the encoder.")
-
+        if decoder_params == None:
+            decoder_params = self._create_decoder_parameters_from_encoder(encoder_params, input_shapes[0])
+        
         encoders, decoders, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
                                                        input_shapes,
@@ -79,13 +80,13 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
     def _create_autoencoder(self, encoder_config, decoder_config, input_shapes, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
 
+        self._create_decoder_parameters_from_encoder(encoder_config, input_shapes[0])
         encoders, encoder_inputs = self._create_encoders(encoder_config, input_shapes)
 
         embeddings = [encoder.output for encoder in encoders]
         embeddings = SharedEmbeddingLayer(gamma=0.1)(embeddings)
 
         decoders, decoder_outputs = self._create_decoders(decoder_config, input_shapes, embeddings)
-
         combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=decoder_outputs)
 
         return encoders, decoders, combined_autoencoder
@@ -117,7 +118,9 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
 
             decoders.append(current_decoder)
             decoder_outputs.append(output)
+
         return decoders, decoder_outputs
+    
 
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100):
@@ -176,7 +179,7 @@ if __name__== "__main__":
     input_shapes = [(d.shape[1],) for d in data]
 
     ae = SharedEmbeddingAutoencoder(config["encoder"],
-                     config["decoder"],
+                     None,
                      input_shapes=input_shapes,
                      latent_shape=latent_shape,
                      loss="mean_squared_error",

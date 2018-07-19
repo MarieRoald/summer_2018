@@ -31,6 +31,7 @@ from sys import argv
 
 import json
 from pprint import pprint
+import copy
 
 class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
@@ -78,6 +79,23 @@ class Autoencoder:
         optimizer = optimizer_type(**optimizer_params["kwargs"])
         return optimizer
 
+    def _create_decoder_parameters_from_encoder(self, encoder_config, input_shape):
+
+        decoder_config = copy.deepcopy(encoder_config)
+        decoder_config = [l for l in decoder_config[-2::-1] if l["type"] != "Dropout"]
+
+        output_layer = {
+                "name": "output",
+                "type": "Dense",
+                "kwargs": {
+                    "units": input_shape[0],
+                    "activation": "linear"
+                }
+        }
+
+        decoder_config.append(output_layer)
+        return decoder_config
+
     def fit(self, X, *args, **kwargs):
         """Trains a keras autoencoder model"""
 
@@ -102,6 +120,8 @@ class Autoencoder:
                            input_shape=None, latent_shape=None):
         """Creates an autoencoder model from dicts containing the parameters"""
 
+
+        # TODO: 
         self.encoder_layers = self._create_layers(encoder_config,
                                             input_shape=input_shape)
         self.decoder_layers = self._create_layers(decoder_config,

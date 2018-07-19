@@ -133,51 +133,9 @@ for latent_dim in [32, 128, 256, 512]:
                                 "activation": "linear",
                                 "units": data[2].shape[1]
                             },
-                        from comet_ml import Experiment
-from autoencode import Autoencoder
-import keras.models as km
-import keras.layers as kl
-import keras.callbacks as kc
-from log_utils import plot_mean_std_loss, GroupedCometLogger
-from data_reader import DataReader
-import copy
-import numpy as np
-from sklearn.model_selection import GroupKFold
-
-from sys import argv
-
-
-import json: "output",
-                        from comet_ml import Experiment
-from autoencode import Autoencoder
-import keras.models as km
-import keras.layers as kl
-import keras.callbacks as kc
-from log_utils import plot_mean_std_loss, GroupedCometLogger
-from data_reader import DataReader
-import copy
-import numpy as np
-from sklearn.model_selection import GroupKFold
-
-from sys import argv
-
-
-import json: "Dense"
-                        from comet_ml import Experiment
-from autoencode import Autoencoder
-import keras.models as km
-import keras.layers as kl
-import keras.callbacks as kc
-from log_utils import plot_mean_std_loss, GroupedCometLogger
-from data_reader import DataReader
-import copy
-import numpy as np
-from sklearn.model_selection import GroupKFold
-
-from sys import argv
-
-
-import json
+                            "name": "output",
+                            "type": "Dense"
+                        }
                     ],
                     "encoder": [
                         {

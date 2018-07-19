@@ -39,8 +39,8 @@ class MultimodalBase(Autoencoder):
         for layer_config in new_config:
             layer_config["name"] = layer_config["name"] + suffix
         return new_config
-class MultimodalAutoencoder(Autoencoder):
 
+class MultimodalAutoencoder(Autoencoder):
     
     def __init__(self, encoder_params, decoder_params, input_shapes,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
