@@ -34,6 +34,13 @@ from pprint import pprint
 import copy
 
 class Autoencoder:
+    def _suffix_config_layer_names(self, config, suffix):
+        new_config = copy.deepcopy(config)
+
+        for layer_config in new_config:
+            layer_config["name"] = layer_config["name"] + suffix
+        return new_config
+
     def __init__(self, encoder_params, decoder_params, input_shape,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
         """ """
@@ -64,6 +71,10 @@ class Autoencoder:
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
 
         self._check_encoder_params(encoder_params, latent_shape)
+        if decoder_params is None:
+            decoder_params = self._create_decoder_parameters_from_encoder(encoder_params, output_dim=None)
+            encoder_params = self._suffix_config_layer_names(encoder_params, "encoder")
+        self._check_decoder_params(decoder_params, input_shape)
 
         encoder, decoder, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
@@ -85,10 +96,28 @@ class Autoencoder:
                 if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
                     raise ValueError("Latent shape must be None or equal to the number of units"
                                      " in the last layer of the encoder.")
+            else:
+                encoder_params[-1]["kwargs"]["units"] = latent_shape[0]
         else:
-            encoder_params[-1]["kwargs"] = {}
+            encoder_params[-1]["kwargs"] = {"units": latent_shape[0]}
 
         return encoder_params
+
+    def _check_decoder_params(self, decoder_params, input_shape):
+        if "kwargs" in decoder_params[-1]:
+            if "units" in decoder_params[-1]["kwargs"]:
+                if decoder_params[-1]["kwargs"]["units"] is None:
+                    decoder_params[-1]["kwargs"]["units"] = input_shape[0]
+
+                if decoder_params[-1]["kwargs"]["units"] != input_shape[0]:
+                    raise ValueError("Decoder output dimension of final layer must be None"
+                                     " or equal to the input dimension"
+                                     " (it is automatically set to be identical"
+                                     " to the input shape of the encoder)")
+            else:
+                decoder_params[-1]["kwargs"]["units"] = input_shape[0]
+        else:
+            decoder_params[-1]["kwargs"] = {"units": input_shape[0]}
 
     def reset(self):
         self._build(**self.get_params())
@@ -105,18 +134,21 @@ class Autoencoder:
         optimizer = optimizer_type(**optimizer_params.get("kwargs",{}))
         return optimizer
 
-    def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None):
+    def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None, suffix="decoder"):
 
         decoder_config = copy.deepcopy(encoder_config)
+        if suffix is not None:
+            self._suffix_config_layer_names(decoder_config, suffix)
+
         decoder_config = [l for l in decoder_config[-2::-1] if l["type"] != "Dropout"]
 
         output_layer = {
-                "name": "output",
-                "type": "Dense",
-                "kwargs": {
-                    "units": output_dim,
-                    "activation": "linear"
-                }
+            "name": "output",
+            "type": "Dense",
+            "kwargs": {
+                "units": output_dim,
+                "activation": "linear"
+            }
         }
 
         decoder_config.append(output_layer)
@@ -143,7 +175,7 @@ class Autoencoder:
         return self.ae.save(filename)
 
     def _create_autoencoder(self, encoder_config, decoder_config,
-                           input_shape=None, latent_shape=None):
+                           input_shape, latent_shape):
         """Creates an autoencoder model from dicts containing the parameters"""
 
         encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
@@ -254,11 +286,10 @@ if __name__== "__main__":
     latent_dim = config["encoder"][-1]["kwargs"]["units"]
     latent_shape = (latent_dim,)
 
-    """
     config = {
         "encoder": [
             {
-                "name": "hidden1_encoder",
+                "name": "hidden1",
                 "type": "Dense",
                 "kwargs": {
                     "units": 2500,
@@ -270,7 +301,7 @@ if __name__== "__main__":
                 }
             },
             {
-                "name": "hidden2_encoder",
+                "name": "hidden2",
                 "type": "Dense",
                 "kwargs": {
                     "units": 2000,
@@ -284,10 +315,6 @@ if __name__== "__main__":
             {
                 "name": "latent",
                 "type": "Dense",
-                "kwargs": {
-                    "units": latent_shape[0],
-                    "activation": "linear"
-                },
 
                 "regularizer": {
                     "type": "l1",
@@ -316,16 +343,15 @@ if __name__== "__main__":
                 "name": "output",
                 "type": "Dense",
                 "kwargs": {
-                    "units": data.shape[1],
+                    "units": input_shape[0],
                     "activation": "linear"
                 }
             }
         ]
     }
-    """
 
     ae = Autoencoder(config["encoder"],
-                     config["decoder"],
+                     None,
                      input_shape=input_shape,
                      latent_shape=latent_shape,
                      loss="mean_squared_error",
