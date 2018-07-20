@@ -84,40 +84,7 @@ class MultimodalBase(Autoencoder):
     def _index_data(self, data, idx):
         return [d[idx] for d in data]
 
-    def cross_validate(self, data, groups, experiment, n_splits=10, 
-                       standardize=True, epochs=100, callbacks=None, log_prefix=""):
 
-        data = self._prepare_data(data)
-
-        val_losses = []
-        train_losses = []
-        val_errors = []
-
-        if callbacks is None:
-            callbacks = []
-
-        for i, (train_idx, val_idx) in enumerate(self._generate_kfold_split(n_splits, data, groups)):
-            self.reset()
-            train_data = self._index_data(data, train_idx)
-            val_data = self._index_data(data, val_idx)
-
-            comet_logger = GroupedCometLogger(experiment, f"{log_prefix}cv_fold_{i}")
-            if standardize:
-                train_data, val_data, _ = \
-                    self._standardize_data(train_data, val_data)
-
-            self.fit(train_data, epochs=epochs, validation_data=val_data,
-                   callbacks=[comet_logger]+callbacks)
-
-            val_losses.append(comet_logger.val_loss)
-            train_losses.append(comet_logger.train_loss)
-            val_errors.append(self._rmse(val_data))
-
-        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
-                                   val_losses, comet_logger.val_steps)
-        experiment.log_figure("Cross validation loss", fig)
-
-        return val_errors    
 class MultimodalAutoencoder(MultimodalBase):
     
     def _build(self, encoder_params, decoder_params, input_shapes,
@@ -216,6 +183,6 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     print(scores)

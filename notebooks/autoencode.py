@@ -249,11 +249,20 @@ class Autoencoder:
         plot_mean_std_loss(train_losses, train_steps, ax=ax, color=colors[1], legend="train")
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
-    def cross_validate(self, data, groups, experiment, n_splits=10,
+    def _generate_kfold_split(self, n_splits, data, groups):
+        kfold = GroupKFold(n_splits=n_splits)
+        return kfold.split(data, data, groups)
+
+    def _prepare_data(self, data):
+        return np.asarray(data)
+
+    def _index_data(self, data, idx):
+        return data[idx]
+
+    def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100, callbacks=None, log_prefix=""):
 
-        data = np.asarray(data)
-        kfold = GroupKFold(n_splits=n_splits)
+        data = self._prepare_data(data)
 
         val_losses = []
         train_losses = []
@@ -262,13 +271,15 @@ class Autoencoder:
         if callbacks is None:
             callbacks = []
 
-        for i, (train_idx, val_idx) in enumerate(kfold.split(data, data, groups)):
+        for i, (train_idx, val_idx) in enumerate(self._generate_kfold_split(n_splits, data, groups)):
             self.reset()
-            train_data, val_data = data[train_idx], data[val_idx]
-            comet_logger = GroupedCometLogger(experiment, f"{log_prefix}cv_fold_{i}")
+            train_data = self._index_data(data, train_idx)
+            val_data = self._index_data(data, val_idx)
 
+            comet_logger = GroupedCometLogger(experiment, f"{log_prefix}cv_fold_{i}")
             if standardize:
-                train_data, val_data, _ = self._standardize_data(train_data, val_data)
+                train_data, val_data, _ = \
+                    self._standardize_data(train_data, val_data)
 
             self.fit(train_data, epochs=epochs, validation_data=val_data,
                    callbacks=[comet_logger]+callbacks)
@@ -277,11 +288,11 @@ class Autoencoder:
             train_losses.append(comet_logger.train_loss)
             val_errors.append(self._rmse(val_data))
 
-        fig = self._crossval_plots(train_losses, comet_logger.train_steps,
+        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
                                    val_losses, comet_logger.val_steps)
         experiment.log_figure("Cross validation loss", fig)
 
-        return val_errors
+        return val_errors 
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
