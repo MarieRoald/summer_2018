@@ -50,28 +50,31 @@ class VariationalAutoencoder(Autoencoder):
         self._build(encoder_params, decoder_params, input_shape,
                     latent_shape, optimizer_params=optimizer_params, loss='mean_absolute_error')
 
-    def _create_autoencoder(self, encoder_config, decoder_config,
-                           input_shape, latent_shape):
-        """Creates a variational autoencoder model from dicts containing the parameters"""
+    def _sample_z(self, z_mu, z_sigma, shape):
+        eps = kl.Input(tensor=K.random_normal(shape=shape))
 
-        encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
-        decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
+        z_eps = kl.Multiply()([z_sigma, eps])
+        z = kl.Add()([z_mu, z_eps])
+        return z, eps
 
-        x = encoder_input
-        h = encoder.output
-
+    def _create_variational_parameters(self, h):
         z_mu = kl.Dense(latent_shape[0])(h)
         z_log_var = kl.Dense(latent_shape[0])(h)
 
         z_mu, z_log_var = KLDivergenceLayer()([z_mu, z_log_var])
         z_sigma = kl.Lambda(lambda t: K.exp(.5*t))(z_log_var)
+        return z_mu, z_sigma
+    
+    def _create_autoencoder(self, encoder_config, decoder_config,
+                           input_shape, latent_shape):
+        """Creates a variational autoencoder model from dicts containing the parameters"""
+        encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
+        decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
 
-        eps = kl.Input(tensor=K.random_normal(shape=(K.shape(x)[0], latent_shape[0])))
+        z_mu, z_sigma = self._create_variational_parameters(encoder.output)
+        z, eps = self._sample_z(z_mu, z_sigma, shape=(K.shape(encoder_input)[0], latent_shape[0]))
 
-        z_eps = kl.Multiply()([z_sigma, eps])
-        z = kl.Add()([z_mu, z_eps])
-
-        vae = km.Model(inputs=[x, eps], outputs=decoder(z))
+        vae = km.Model(inputs=[encoder_input, eps], outputs=decoder(z))
         return encoder, decoder, vae
 
 if __name__== "__main__":
