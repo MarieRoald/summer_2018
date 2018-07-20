@@ -15,13 +15,9 @@ from sys import argv
 import json
 from pprint import pprint
 class MultimodalBase(Autoencoder):
-
-
-
     def __init__(self, encoder_params, decoder_params, input_shapes,
                  latent_shape, optimizer_params=None, loss="mean_squared_error"):
         """ """
-
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
         self._build(encoder_params, decoder_params, input_shapes,
@@ -63,6 +59,20 @@ class MultimodalBase(Autoencoder):
             decoder_outputs.append(output)
         return decoders, decoder_outputs
 
+    def _standardize_data(self, train_data_list, val_data_list):
+        train_data_scaled = []
+        val_data_scaled = []
+        scalers = []
+
+        for td, vd in zip(train_data_list,val_data_list):
+            td_scaled, vd_scaled, scaler = super()._standardize_data(td, vd)
+
+            train_data_scaled.append(td_scaled)
+            val_data_scaled.append(vd_scaled)
+            scalers.append(scaler)
+
+        return train_data_scaled, val_data_scaled, scalers
+
     
 class MultimodalAutoencoder(MultimodalBase):
     
@@ -84,14 +94,17 @@ class MultimodalAutoencoder(MultimodalBase):
         self.optimizer = self._create_optimizer(optimizer_params)
         self.ae.compile(optimizer=self.optimizer, loss=loss)
 
-    def fit(self, X, *args, **kwargs):
+    def fit(self, X, validation_data=None, *args, **kwargs):
         """Trains a keras autoencoder model
         
         Parameters
         ----------
         X : List of numpy arrays.
         """
-        self.ae.fit(x=X, y=self._create_output(X), **kwargs)
+        if validation_data is not None:
+            validation_data = self._create_validation_data(validation_data)
+
+        self.ae.fit(x=X, y=self._create_output(X), validation_data=validation_data, **kwargs)
 
     def _join_dataset(self,X):
         return np.concatenate(X,1)
@@ -127,39 +140,33 @@ class MultimodalAutoencoder(MultimodalBase):
         val_rmse = np.sqrt(((self._join_dataset(predictions) - self._join_dataset(self._create_output(val_data)))**2).mean())
         return val_rmse
 
+    def _create_validation_data(self, val_data):
+        return (val_data, self._create_output(val_data))
+
     def cross_validate(self, data, groups, experiment, n_splits=10, 
-                       standardize=True, epochs=100):
+                       standardize=True, epochs=100, callbacks=None):
 
         data = [np.asarray(d) for d in data]
         kfold = GroupKFold(n_splits=n_splits)
 
         val_losses = []
         train_losses = []
-
-        print(data[0])
         val_errors = []
+
+        if callbacks is None:
+            callbacks = []
 
         for i, (train_idx, val_idx) in enumerate(kfold.split(data[0], data[0], groups)):
             self.reset()
-            print(train_idx)
             train_data = [d[train_idx] for d in data]
             val_data = [d[val_idx] for d in data]
             comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
+            if standardize:
+                train_data, val_data, _ = \
+                    self._standardize_data(train_data, val_data)
 
-            train_data_scaled = []
-            val_data_scaled = []
-            for td, vd in zip(train_data,val_data):
-                if standardize:
-                    td_scaled, vd_scaled, _ = self._standardize_data(td, vd)
-                else:
-                    td_scaled, vd_scaled = td, vd
-                train_data_scaled.append(td_scaled)
-                val_data_scaled.append(vd_scaled)
-
-            train_data, val_data = train_data_scaled, val_data_scaled
-            self.fit(train_data, epochs=epochs, validation_data=(val_data, self._create_output(val_data)),
-
-                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+            self.fit(train_data, epochs=epochs, validation_data=val_data,
+                   callbacks=[comet_logger]+callbacks)
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
@@ -170,9 +177,6 @@ class MultimodalAutoencoder(MultimodalBase):
         experiment.log_figure("Cross validation loss", fig)
 
         return val_errors
-
-
-
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
@@ -187,9 +191,7 @@ if __name__== "__main__":
     latent_dim = config["encoder"][-1]["kwargs"]["units"]
     latent_shape = (latent_dim,)
 
-
     input_shapes = [(d.shape[1],) for d in data]
-
 
     ae = MultimodalAutoencoder(config["encoder"],
                      config["decoder"],
@@ -205,6 +207,6 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000, n_splits=4)
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     print(scores)
