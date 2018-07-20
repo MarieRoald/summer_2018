@@ -72,7 +72,7 @@ class Autoencoder:
         self._check_encoder_params(encoder_params, latent_shape)
         if decoder_params is None:
             decoder_params = self._create_decoder_parameters_from_encoder(encoder_params, output_dim=None)
-            encoder_params = self._suffix_config_layer_names(encoder_params, "encoder")
+            encoder_params = self._suffix_config_layer_names(encoder_params, "_encoder")
         self._check_decoder_params(decoder_params, input_shape)
 
         return encoder_params, decoder_params
