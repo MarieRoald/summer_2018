@@ -8,7 +8,7 @@ filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
 
 
 data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
-data = data_reader.get_seperate_data()
+data = data_reader.seperate_data
 
 l1_regs = [0] + [10**(-i) for i in range(1,6)]
 input_shapes = [(d.shape[1],) for d in data]
@@ -174,7 +174,7 @@ for latent_dim in [32, 128, 256, 512]:
             experiment.log_parameter("Experiment name", "Testing different layers")
             experiment.log_parameter("Latent dim", latent_shape[0])
 
-            groups = data_reader.get_groups()
+            groups = data_reader.groups
             all_scores = []
 
             for i in range(3):
