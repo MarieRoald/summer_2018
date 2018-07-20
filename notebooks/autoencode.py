@@ -139,7 +139,7 @@ class Autoencoder:
         optimizer = optimizer_type(**optimizer_params.get("kwargs",{}))
         return optimizer
 
-    def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None, suffix="decoder"):
+    def _create_decoder_parameters_from_encoder(self, encoder_config, output_dim=None, suffix="_decoder"):
 
         decoder_config = copy.deepcopy(encoder_config)
         if suffix is not None:

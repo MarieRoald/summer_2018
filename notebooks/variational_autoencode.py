@@ -31,12 +31,10 @@ from log_utils import plot_mean_std_loss, GroupedCometLogger
 from data_reader import DataReader
 from sys import argv
 
-
 import json
 from pprint import pprint
 
 from autoencoder_layers import KLDivergenceLayer
-
 
 
 def nll(y_true, y_pred):
@@ -56,20 +54,11 @@ class VariationalAutoencoder(Autoencoder):
                            input_shape=None, latent_shape=None):
         """Creates an autoencoder model from dicts containing the parameters"""
 
-        self.encoder_layers = self._create_layers(encoder_config)
-        self.decoder_layers = self._create_layers(decoder_config,
-                                            input_shape=latent_shape)
+        encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
+        decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
 
-        
-        # x må være input
-        # h må lages som siste encoder lag eller noe sånt
-
-        x = kl.Input(shape=input_shape)
-
-        h = self._stack_layers(input=x,layers=self.encoder_layers)
-        
-        encoder = km.Model(inputs=x, outputs=h) 
-
+        x = encoder_input
+        h = encoder.output
 
         z_mu = kl.Dense(latent_shape[0])(h)
         z_log_var = kl.Dense(latent_shape[0])(h)
@@ -77,25 +66,13 @@ class VariationalAutoencoder(Autoencoder):
         z_mu, z_log_var = KLDivergenceLayer()([z_mu, z_log_var])
         z_sigma = kl.Lambda(lambda t: K.exp(.5*t))(z_log_var)
 
-
         eps = kl.Input(tensor=K.random_normal(shape=(K.shape(x)[0], latent_shape[0])))
+
         z_eps = kl.Multiply()([z_sigma, eps])
         z = kl.Add()([z_mu, z_eps])
 
-        #from ipdb import set_trace; set_trace()
-        decoder = km.Sequential(self.decoder_layers)
-
-        vae = km.Model(inputs=[x, eps], outputs= decoder(z))
+        vae = km.Model(inputs=[x, eps], outputs=decoder(z))
         return encoder, decoder, vae
-
-
-
-    def _stack_layers(self, input, layers):
-        current_input_layer = layers[0](input)
-        for layer in layers[1:]:
-            current_input_layer = layer(current_input_layer)
-
-        return current_input_layer
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
@@ -185,7 +162,7 @@ if __name__== "__main__":
     """
 
     ae = VariationalAutoencoder(config["encoder"],
-                     config["decoder"],
+                     None,
                      input_shape=input_shape,
                      latent_shape=latent_shape,
                      optimizer_params=None)
