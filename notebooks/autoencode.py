@@ -43,12 +43,27 @@ class Autoencoder:
         self._build(encoder_params, decoder_params, input_shape,
                     latent_shape, optimizer_params=optimizer_params, loss=loss)
 
+    def _create_model(self, config, input_shape):
+        layers = self._create_layers(config)
+        model_input = kl.Input(shape=input_shape)
+        encoder = self._create_model_from_layers(input=model_input, layers=layers)
+        return encoder, model_input, layers
+
+    def _create_model_from_layers(self, input, layers):
+        output = self._stack_layers(input=input, layers=layers)
+        model = km.Model(inputs=input, outputs=output)
+        return model
+
+    def _stack_layers(self, input, layers):
+        current_output = layers[0](input)
+        for layer in layers[1:]:
+            current_output = layer(current_output)
+        return current_output
+
     def _build(self, encoder_params, decoder_params, input_shape,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
 
-        if encoder_params[-1]["kwargs"]["units"] != latent_shape[0]:
-            raise ValueError("Latent shape must be equal to the number of units"
-                             " in the last layer of the encoder.")
+        self._check_encoder_params(encoder_params, latent_shape)
 
         encoder, decoder, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
@@ -131,16 +146,10 @@ class Autoencoder:
                            input_shape=None, latent_shape=None):
         """Creates an autoencoder model from dicts containing the parameters"""
 
+        encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
+        decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
 
-        # TODO: 
-        self.encoder_layers = self._create_layers(encoder_config,
-                                            input_shape=input_shape)
-        self.decoder_layers = self._create_layers(decoder_config,
-                                            input_shape=latent_shape)
-
-        encoder = km.Sequential(self.encoder_layers)
-        decoder = km.Sequential(self.decoder_layers)
-        autoencoder_model = km.Sequential(self.encoder_layers + self.decoder_layers[1:] )
+        autoencoder_model = self._create_model_from_layers(input=encoder_input, layers=encoder_layers + decoder_layers)
 
         return encoder, decoder, autoencoder_model
 
@@ -168,7 +177,6 @@ class Autoencoder:
         return layers
 
     def _standardize_data(self, train_data, val_data):
-
         scaler = StandardScaler()
         train_data = scaler.fit_transform(train_data)
         val_data = scaler.transform(val_data)
