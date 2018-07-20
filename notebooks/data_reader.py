@@ -16,11 +16,11 @@ class DataReader:
         groups = pd.read_csv(filename, index_col=0, names=["Sample ID", "Person ID"])
         return groups
 
-    def get_all_data(self):
+    @property
+    def combined_data(self):
         return pd.concat(self.dataframes, axis=1)
 
-    def get_seperate_data(self):
+    @property
+    def seperate_data(self):
         return self.dataframes
 
-    def get_groups(self):
-        return self.groups

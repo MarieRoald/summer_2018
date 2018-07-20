@@ -177,8 +177,8 @@ class MultimodalAutoencoder(MultimodalBase):
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
     data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
-    data = data_reader.get_seperate_data()
-    data_combined = data_reader.get_all_data()
+    data = data_reader.seperate_data
+    data_combined = data_reader.combined_data
 
     config_filename = argv[1]
     with open(config_filename) as f:
@@ -198,7 +198,7 @@ if __name__== "__main__":
                      loss="mean_squared_error",
                      optimizer_params=None)
 
-    groups = data_reader.get_groups()
+    groups = data_reader.groups
 
     experiment = Experiment(project_name="Multimodal Autoencoder", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
     experiment.log_parameter("Experiment name", "multimodal test")

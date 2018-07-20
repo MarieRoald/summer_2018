@@ -87,7 +87,7 @@ if __name__== "__main__":
     pprint(config)
 
     data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
-    data = data_reader.get_all_data()
+    data = data_reader.combined_data
 
     input_shape = (data.shape[1],)
     # latent_shape = (100,)
@@ -170,7 +170,7 @@ if __name__== "__main__":
                      latent_shape=latent_shape,
                      optimizer_params=None)
 
-    groups = data_reader.get_groups()
+    groups = data_reader.groups
 
     experiment = Experiment(project_name="variational autoencoder", api_key="50kNmWUHJrWHz3FlgtpITIsB1")
     experiment.log_parameter("Experiment name", "Testing different architectures")
