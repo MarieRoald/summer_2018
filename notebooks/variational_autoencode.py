@@ -51,8 +51,8 @@ class VariationalAutoencoder(Autoencoder):
                     latent_shape, optimizer_params=optimizer_params, loss='mean_absolute_error')
 
     def _create_autoencoder(self, encoder_config, decoder_config,
-                           input_shape=None, latent_shape=None):
-        """Creates an autoencoder model from dicts containing the parameters"""
+                           input_shape, latent_shape):
+        """Creates a variational autoencoder model from dicts containing the parameters"""
 
         encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
         decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
