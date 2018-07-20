@@ -159,10 +159,16 @@ class Autoencoder:
         decoder_config.append(output_layer)
         return decoder_config
 
-    def fit(self, X, *args, **kwargs):
+    def fit(self, X, validation_data=None, *args, **kwargs):
         """Trains a keras autoencoder model"""
 
-        self.ae.fit(X, X, *args, **kwargs)
+        if validation_data is not None:
+            validation_data = self._create_validation_data(validation_data)
+
+        self.ae.fit(X, X, validation_data=validation_data, *args, **kwargs)
+
+    def _create_validation_data(self, val_data):
+        return (val_data, val_data)
 
     def get_params(self, deep=False):
         return self._input_params
@@ -244,7 +250,7 @@ class Autoencoder:
         plot_mean_std_loss(val_losses, val_steps, ax=ax, color=colors[0], legend="val")
 
     def cross_validate(self, data, groups, experiment, n_splits=10,
-                       standardize=True, epochs=100, log_prefix=""):
+                       standardize=True, epochs=100, callbacks=None, log_prefix=""):
 
         data = np.asarray(data)
         kfold = GroupKFold(n_splits=n_splits)
@@ -252,6 +258,9 @@ class Autoencoder:
         val_losses = []
         train_losses = []
         val_errors = []
+
+        if callbacks is None:
+            callbacks = []
 
         for i, (train_idx, val_idx) in enumerate(kfold.split(data, data, groups)):
             self.reset()
@@ -261,8 +270,8 @@ class Autoencoder:
             if standardize:
                 train_data, val_data, _ = self._standardize_data(train_data, val_data)
 
-            self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data),
-                   callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+            self.fit(train_data, epochs=epochs, validation_data=val_data,
+                   callbacks=[comet_logger]+callbacks)
 
             val_losses.append(comet_logger.val_loss)
             train_losses.append(comet_logger.train_loss)
@@ -369,7 +378,7 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4)
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4,callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     #ae.save("saved_model.h5")
     experiment.log_other("scores", scores)

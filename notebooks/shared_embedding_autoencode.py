@@ -75,46 +75,6 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
 
         return encoders, decoders, combined_autoencoder
 
-    def cross_validate(self, data, groups, experiment, n_splits=10, 
-                       standardize=True, epochs=100):
-
-        data = [np.asarray(d) for d in data]
-        kfold = GroupKFold(n_splits=n_splits)
-
-        val_losses = []
-        train_losses = []
-        val_errors = []
-
-        for i, (train_idx, val_idx) in enumerate(kfold.split(data[0], data[0], groups)):
-            self.reset()
-            train_data = [d[train_idx] for d in data]
-            val_data = [d[val_idx] for d in data]
-            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
-
-            train_data_scaled = []
-            val_data_scaled = []
-            for td, vd in zip(train_data,val_data):
-                if standardize:
-                    td_scaled, vd_scaled, _ = self._standardize_data(td, vd)
-                else:
-                    td_scaled, vd_scaled = td, vd
-                train_data_scaled.append(td_scaled)
-                val_data_scaled.append(vd_scaled)
-
-            train_data, val_data = train_data_scaled, val_data_scaled
-            self.fit(train_data, epochs=epochs, validation_data=(val_data, val_data), callbacks=[comet_logger, kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
-
-            val_losses.append(comet_logger.val_loss)
-            train_losses.append(comet_logger.train_loss)
-            val_errors.append(self._rmse(val_data))
-
-        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
-                                   val_losses, comet_logger.val_steps)
-        experiment.log_figure("Cross validation loss", fig)
-
-        return val_errors
-
-
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
     data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")

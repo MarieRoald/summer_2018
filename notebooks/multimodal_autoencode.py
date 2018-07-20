@@ -73,7 +73,51 @@ class MultimodalBase(Autoencoder):
 
         return train_data_scaled, val_data_scaled, scalers
 
-    
+    def _generate_kfold_split(self, n_splits, data, groups):
+        kfold = GroupKFold(n_splits=n_splits)
+        return kfold.split(data[0], data[0], groups)
+
+    def _prepare_data(self, data):
+        data = [np.asarray(d) for d in data]
+        return data
+
+    def _index_data(self, data, idx):
+        return [d[idx] for d in data]
+
+    def cross_validate(self, data, groups, experiment, n_splits=10, 
+                       standardize=True, epochs=100, callbacks=None, log_prefix=""):
+
+        data = self._prepare_data(data)
+
+        val_losses = []
+        train_losses = []
+        val_errors = []
+
+        if callbacks is None:
+            callbacks = []
+
+        for i, (train_idx, val_idx) in enumerate(self._generate_kfold_split(n_splits, data, groups)):
+            self.reset()
+            train_data = self._index_data(data, train_idx)
+            val_data = self._index_data(data, val_idx)
+
+            comet_logger = GroupedCometLogger(experiment, f"{log_prefix}cv_fold_{i}")
+            if standardize:
+                train_data, val_data, _ = \
+                    self._standardize_data(train_data, val_data)
+
+            self.fit(train_data, epochs=epochs, validation_data=val_data,
+                   callbacks=[comet_logger]+callbacks)
+
+            val_losses.append(comet_logger.val_loss)
+            train_losses.append(comet_logger.train_loss)
+            val_errors.append(self._rmse(val_data))
+
+        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
+                                   val_losses, comet_logger.val_steps)
+        experiment.log_figure("Cross validation loss", fig)
+
+        return val_errors    
 class MultimodalAutoencoder(MultimodalBase):
     
     def _build(self, encoder_params, decoder_params, input_shapes,
@@ -142,41 +186,6 @@ class MultimodalAutoencoder(MultimodalBase):
 
     def _create_validation_data(self, val_data):
         return (val_data, self._create_output(val_data))
-
-    def cross_validate(self, data, groups, experiment, n_splits=10, 
-                       standardize=True, epochs=100, callbacks=None):
-
-        data = [np.asarray(d) for d in data]
-        kfold = GroupKFold(n_splits=n_splits)
-
-        val_losses = []
-        train_losses = []
-        val_errors = []
-
-        if callbacks is None:
-            callbacks = []
-
-        for i, (train_idx, val_idx) in enumerate(kfold.split(data[0], data[0], groups)):
-            self.reset()
-            train_data = [d[train_idx] for d in data]
-            val_data = [d[val_idx] for d in data]
-            comet_logger = GroupedCometLogger(experiment, f"cv_fold_{i}")
-            if standardize:
-                train_data, val_data, _ = \
-                    self._standardize_data(train_data, val_data)
-
-            self.fit(train_data, epochs=epochs, validation_data=val_data,
-                   callbacks=[comet_logger]+callbacks)
-
-            val_losses.append(comet_logger.val_loss)
-            train_losses.append(comet_logger.train_loss)
-            val_errors.append(self._rmse(val_data))
-
-        fig = self._crossval_plots(train_losses, comet_logger.train_steps, 
-                                   val_losses, comet_logger.val_steps)
-        experiment.log_figure("Cross validation loss", fig)
-
-        return val_errors
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
