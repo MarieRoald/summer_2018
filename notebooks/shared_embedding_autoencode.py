@@ -17,20 +17,8 @@ from pprint import pprint
 from sys import argv
 
 import json
+from autoencoder_layers import SharedEmbeddingLayer
 
-class SharedEmbeddingLayer(Layer):
-    def __init__(self, gamma, *args, **kwargs):
-        self.gamma = gamma
-        self.is_placeholder = True
-        super(SharedEmbeddingLayer, self).__init__(*args, **kwargs)
-
-    def call(self, embeddings):
-        reg = 0
-        for ej in embeddings:
-            for ei in embeddings:
-                reg += K.tf.losses.mean_squared_error(ej, ei)
-        self.add_loss(self.gamma*reg)
-        return embeddings
 
 class SharedEmbeddingAutoencoder(MultimodalBase):
 

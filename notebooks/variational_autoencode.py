@@ -35,21 +35,9 @@ from sys import argv
 import json
 from pprint import pprint
 
-class KLDivergenceLayer(Layer):
-    def __init__(self, *args, **kwargs):
-        self.is_placeholder = True
-        super(KLDivergenceLayer, self).__init__(*args, **kwargs)
+from autoencoder_layers import KLDivergenceLayer
 
-    def call(self, inputs):
-        mu, log_var = inputs
 
-        kl_batch = 0*K.sum(1 + log_var - 
-                             K.square(mu) - 
-                             K.exp(log_var),
-                             axis=-1)
-        self.add_loss(K.mean(kl_batch), inputs=inputs)
-
-        return inputs
 
 def nll(y_true, y_pred):
     return K.sum(K.binary_crossentropy(y_true, y_pred), axis=-1)
@@ -59,7 +47,6 @@ class VariationalAutoencoder(Autoencoder):
     def __init__(self, encoder_params, decoder_params, input_shape,
                  latent_shape, optimizer_params=None):
         """ """
-
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
         self._build(encoder_params, decoder_params, input_shape,
