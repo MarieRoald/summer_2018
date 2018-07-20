@@ -66,9 +66,8 @@ class Autoencoder:
         for layer in layers[1:]:
             current_output = layer(current_output)
         return current_output
-
-    def _build(self, encoder_params, decoder_params, input_shape,
-               latent_shape, optimizer_params=None, loss="mean_squared_error"):
+    
+    def _initiate_params(self, encoder_params, decoder_params, input_shape, latent_shape):
 
         self._check_encoder_params(encoder_params, latent_shape)
         if decoder_params is None:
@@ -76,6 +75,12 @@ class Autoencoder:
             encoder_params = self._suffix_config_layer_names(encoder_params, "encoder")
         self._check_decoder_params(decoder_params, input_shape)
 
+        return encoder_params, decoder_params
+
+    def _build(self, encoder_params, decoder_params, input_shape,
+               latent_shape, optimizer_params=None, loss="mean_squared_error"):
+
+        encoder_params, decoder_params = self._initiate_params(encoder_params, decoder_params, input_shape, latent_shape)
         encoder, decoder, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,
                                                        input_shape,
