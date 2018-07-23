@@ -81,129 +81,64 @@ if __name__== "__main__":
     data = data_reader.seperate_data
     data_combined = data_reader.combined_data
 
-    config_filename = argv[1]
-    with open(config_filename) as f:
-        config = json.load(f)
+    if len(argv) > 1:
+        config_filename = argv[1]
+        with open(config_filename) as f:
+            config = json.load(f)
+            latent_dim = config["encoder"][-1]["kwargs"]["units"]
+    else:
+        latent_dim = 100    
+        config = {
+            "encoder": [
+                {
+                    "name": "hidden1",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 250,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm1",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "hidden2",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 200,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm2",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "latent",
+                    "type": "Dense",
 
-    
-    config = {
-        "encoder": [
-            {
-                "name": "hidden1_encoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2500,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
                 }
-            },
-            {
-                "name": "hidden2_encoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2000,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            },
-            {
-                "name": "latent",
-                "type": "Dense",
-                "kwargs": {
-                    "units": None,
-                    "activation": "linear"
-                },
+            ]
+        }
+        config_filename = None
 
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            }
-        ]
-    }
-
-
-    config = {
-        "encoder": [
-            {
-                "name": "hidden1_encoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2500,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            },
-            {
-                "name": "hidden2_encoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2000,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            },
-            {
-                "name": "latent",
-                "type": "Dense",
-                "kwargs": {
-                    "units": None,
-                    "activation": "linear"
-                },
-
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            }
-        ],
-        "decoder": [
-            {
-                "name": "hidden2_decoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2000,
-                    "activation": "relu"
-                }
-            },
-            {
-                "name": "hidden1_decoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2500,
-                    "activation": "relu"
-                }
-            },
-            {
-                "name": "output",
-                "type": "Dense",
-                "kwargs": {
-                    "units": None,
-                    "activation": "linear"
-                }
-            }
-        ]
-    }
-    latent_dim = config["encoder"][-1]["kwargs"]["units"]
-    latent_dim = 8
     latent_shape = (latent_dim,)
 
     input_shapes = [(d.shape[1],) for d in data]
 
     ae = SharedEmbeddingAutoencoder(config["encoder"],
-                     config["decoder"],
+                     None,
                      input_shapes=input_shapes,
                      latent_shape=latent_shape,
                      loss="mean_squared_error",
@@ -216,6 +151,7 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)] )
+    ae.summary()
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)] )
 
     print(scores)

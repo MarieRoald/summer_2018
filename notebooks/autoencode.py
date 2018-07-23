@@ -143,7 +143,7 @@ class Autoencoder:
 
         decoder_config = copy.deepcopy(encoder_config)
         if suffix is not None:
-            self._suffix_config_layer_names(decoder_config, suffix)
+            decoder_config = self._suffix_config_layer_names(decoder_config, suffix)
 
         decoder_config = [l for l in decoder_config[-2::-1] if l["type"] != "Dropout"]
 
@@ -258,6 +258,9 @@ class Autoencoder:
 
     def _index_data(self, data, idx):
         return data[idx]
+    
+    def summary(self):
+        return self.ae.summary()
 
     def cross_validate(self, data, groups, experiment, n_splits=10, 
                        standardize=True, epochs=100, callbacks=None, log_prefix=""):
@@ -296,84 +299,65 @@ class Autoencoder:
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]
-
-    config_filename = argv[1]
-    with open(config_filename) as f:
-        config = json.load(f)
-
-    pprint(config)
-
+    
     data_reader = DataReader(data_set_filenames=filenames, groups_filename="ID_train.csv")
     data = data_reader.combined_data
 
+    if len(argv) > 1:
+        config_filename = argv[1]
+        with open(config_filename) as f:
+            config = json.load(f)
+            latent_dim = config["encoder"][-1]["kwargs"]["units"]
+    else:
+        latent_dim = 100    
+        config = {
+            "encoder": [
+                {
+                    "name": "hidden1",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 2500,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm1",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "hidden2",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 2000,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm2",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "latent",
+                    "type": "Dense",
+
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                }
+            ]
+        }
+        config_filename = None
+
     input_shape = (data.shape[1],)
-    # latent_shape = (100,)
-    latent_dim = config["encoder"][-1]["kwargs"]["units"]
     latent_shape = (latent_dim,)
 
-    config = {
-        "encoder": [
-            {
-                "name": "hidden1",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2500,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            },
-            {
-                "name": "hidden2",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2000,
-                    "activation": "relu"
-                },
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            },
-            {
-                "name": "latent",
-                "type": "Dense",
-
-                "regularizer": {
-                    "type": "l1",
-                    "value": 1e-3
-                }
-            }
-        ],
-        "decoder": [
-            {
-                "name": "hidden2_decoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2000,
-                    "activation": "relu"
-                }
-            },
-            {
-                "name": "hidden1_decoder",
-                "type": "Dense",
-                "kwargs": {
-                    "units": 2500,
-                    "activation": "relu"
-                }
-            },
-            {
-                "name": "output",
-                "type": "Dense",
-                "kwargs": {
-                    "units": input_shape[0],
-                    "activation": "linear"
-                }
-            }
-        ]
-    }
 
     ae = Autoencoder(config["encoder"],
                      None,
@@ -389,6 +373,9 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
+
+    ae.summary()
+
     scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4,callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     #ae.save("saved_model.h5")
