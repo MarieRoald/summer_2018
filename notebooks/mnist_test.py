@@ -14,9 +14,7 @@ def test_variational_autoencoder():
     x_test = x_test.astype('float32') / 255.
     x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
     x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))    
-
-
-
+    
     config = {
         "encoder": [
             {
@@ -28,19 +26,8 @@ def test_variational_autoencoder():
                 "type": "Dense"
             },
             {
-                "name": "batchnorm",
-                "type": "BatchNormalization"
-            },
-            {
                 "kwargs": {
-                    "rate": 0
-                },
-                "name": "dropout",
-                "type": "Dropout"
-            },
-            {
-                "kwargs": {
-                    "activation": "sigmoid",
+                    "activation": "relu",
                 },
                 "name": "latent",
                 "regularizer": {
@@ -49,10 +36,28 @@ def test_variational_autoencoder():
                 },
                 "type": "Dense"
             }
+        ],
+        "decoder": [
+            {
+                "kwargs": {
+                    "activation": "relu",
+                    "units": 256
+                },
+                "name": "hidden1",
+                "type": "Dense"
+            },
+            {
+                "kwargs": {
+                    "activation": "sigmoid",
+                },
+                "name": "output",
+                "type": "Dense"
+            }
         ]
+
     }
 
-    latent_dim = 32
+    latent_dim = 2
     latent_shape = (latent_dim,)
     input_shape = (x_train.shape[1],)
 
@@ -60,7 +65,7 @@ def test_variational_autoencoder():
     print(input_shape)
 
     ae = VariationalAutoencoder(config["encoder"],
-                     None,
+                     config["decoder"],
                      input_shape=input_shape,
                      latent_shape=latent_shape,
                      optimizer_params=None)
@@ -385,5 +390,5 @@ def test_shared_embedding_autoencoder():
 if __name__== "__main__":
     #test_autoencoder()
     #test_multimodal_autoencoder()
-    #test_variational_autoencoder()
-    test_shared_embedding_autoencoder()
+    test_variational_autoencoder()
+    #test_shared_embedding_autoencoder()

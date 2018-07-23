@@ -43,12 +43,15 @@ def nll(y_true, y_pred):
 class VariationalAutoencoder(Autoencoder):
 
     def __init__(self, encoder_params, decoder_params, input_shape,
-                 latent_shape, optimizer_params=None):
+                 latent_shape, optimizer_params=None, loss=None):
         """ """
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
+        if loss is None:
+            loss = nll
+
         self._build(encoder_params, decoder_params, input_shape,
-                    latent_shape, optimizer_params=optimizer_params, loss='mean_absolute_error')
+                    latent_shape, optimizer_params=optimizer_params, loss=loss)
 
     def _sample_z(self, z_mu, z_sigma, shape):
         eps = kl.Input(tensor=K.random_normal(shape=shape))

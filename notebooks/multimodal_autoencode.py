@@ -170,17 +170,64 @@ if __name__== "__main__":
     data = data_reader.seperate_data
     data_combined = data_reader.combined_data
 
-    config_filename = argv[1]
-    with open(config_filename) as f:
-        config = json.load(f)
+    if len(argv) > 1:
+        config_filename = argv[1]
+        with open(config_filename) as f:
+            config = json.load(f)
+            latent_dim = config["encoder"][-1]["kwargs"]["units"]
+    else:
+        latent_dim = 100    
+        config = {
+            "encoder": [
+                {
+                    "name": "hidden1",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 250,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm1",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "hidden2",
+                    "type": "Dense",
+                    "kwargs": {
+                        "units": 200,
+                        "activation": "relu"
+                    },
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                },            {
+                    "name": "batchnorm2",
+                    "type": "BatchNormalization"
+                },
+                {
+                    "name": "latent",
+                    "type": "Dense",
 
-    latent_dim = config["encoder"][-1]["kwargs"]["units"]
+                    "regularizer": {
+                        "type": "l1",
+                        "value": 1e-3
+                    }
+                }
+            ]
+        }
+        config_filename = None
+
     latent_shape = (latent_dim,)
 
     input_shapes = [(d.shape[1],) for d in data]
 
     ae = MultimodalAutoencoder(config["encoder"],
-                     config["decoder"],
+                     None,
                      input_shapes=input_shapes,
                      latent_shape=latent_shape,
                      loss="mean_squared_error",
@@ -193,6 +240,6 @@ if __name__== "__main__":
     experiment.log_parameter("Architecture file name", config_filename)
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=1000, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     print(scores)

@@ -376,7 +376,7 @@ if __name__== "__main__":
 
     ae.summary()
 
-    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4,callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
+    scores = ae.cross_validate(data, groups, experiment=experiment, epochs=10000, n_splits=4, callbacks = [kc.EarlyStopping(monitor="val_loss", min_delta=0.000001, patience=10)])
 
     #ae.save("saved_model.h5")
     experiment.log_other("scores", scores)
