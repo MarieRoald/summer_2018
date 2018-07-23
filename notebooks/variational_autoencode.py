@@ -57,9 +57,9 @@ class VariationalAutoencoder(Autoencoder):
         z = kl.Add()([z_mu, z_eps])
         return z, eps
 
-    def _create_variational_parameters(self, h):
-        z_mu = kl.Dense(latent_shape[0])(h)
-        z_log_var = kl.Dense(latent_shape[0])(h)
+    def _create_variational_parameters(self, h, latent_dim):
+        z_mu = kl.Dense(latent_dim)(h)
+        z_log_var = kl.Dense(latent_dim)(h)
 
         z_mu, z_log_var = KLDivergenceLayer()([z_mu, z_log_var])
         z_sigma = kl.Lambda(lambda t: K.exp(.5*t))(z_log_var)
@@ -71,7 +71,7 @@ class VariationalAutoencoder(Autoencoder):
         encoder, encoder_input, encoder_layers = self._create_model(encoder_config, input_shape)
         decoder, decoder_input, decoder_layers = self._create_model(decoder_config, latent_shape)
 
-        z_mu, z_sigma = self._create_variational_parameters(encoder.output)
+        z_mu, z_sigma = self._create_variational_parameters(encoder.output, latent_shape[0])
         z, eps = self._sample_z(z_mu, z_sigma, shape=(K.shape(encoder_input)[0], latent_shape[0]))
 
         vae = km.Model(inputs=[encoder_input, eps], outputs=decoder(z))

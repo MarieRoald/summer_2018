@@ -91,7 +91,17 @@ class MultimodalAutoencoder(MultimodalBase):
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
         
         self._check_encoder_params(encoder_params, latent_shape)
+
+        if decoder_params is None:
+            #from ipdb import set_trace; set_trace()
+            dim = 0
+            for shape in input_shapes:
+                dim += shape[0]
+            decoder_params = self._create_decoder_parameters_from_encoder(encoder_params, output_dim=dim)
+
         encoder_params = self._create_n_encoder_dicts(encoder_params, n=len(input_shapes))
+
+        # TODO: self._check_decoder_params(decoder_params, input_shapes)
 
         encoder, decoder, single_modal_aes, ae = self._create_autoencoder(encoder_params,
                                                        decoder_params,

@@ -212,10 +212,10 @@ class Autoencoder:
                 regularizer = regularizer_type(reg_params["value"])
                 layers.append(layertype(name=config_dict["name"],
                                         activity_regularizer=regularizer,
-                                        **config_dict["kwargs"]))
+                                        **config_dict.get("kwargs", {})))
             else:
                 layers.append(layertype(name=config_dict["name"],
-                                        **config_dict["kwargs"]))
+                                        **config_dict.get("kwargs", {})))
 
         return layers
 
