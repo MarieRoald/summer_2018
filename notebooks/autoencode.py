@@ -34,6 +34,77 @@ from pprint import pprint
 import copy
 
 class Autoencoder:
+    """Class to create an autoencoder model with the Keras API. 
+
+    The autoencoder architecture is defined with a list of dictionaries. 
+    Each dictionary contains the parameters to create a Keras Layer Instance. 
+    The parameter dictionaries have to include a `"name"` and a `"type"`. 
+    The name is the name of the layer instance, and the type is the name of the 
+    Keras Layer to instantiate.  
+
+    Parameters
+    -----------
+    encoder_params: list of dictionaries
+        List of dictionaries containing the layer architecture for the encoder. 
+    input_shape: tuple
+        Tuple describing the shape of the input (not including batch size).
+    latent_shape: tuple
+        Tuple describing the shape of the latent embedding (not including 
+        batch size).
+    decoder_params: dict
+        Dictionary containing the architecture for the decoder. If not given, 
+        the decoder architecture is generated from the encoder architecture.
+    optimizer_params: dict (optional)
+        Dictionary containing parameters to create optimizer. If not given,
+        the default optimizer is "adam" 
+    loss: String (name of objective function) or keras objective function
+        Loss function that is passed to keras model compilation 
+    
+
+    Examples:
+    ---------
+    encoder_config = [
+        {
+            "name": "hidden1",
+            "type": "Dense",
+            "kwargs": {
+                "units": 2500,
+                "activation": "relu"
+            },
+            "regularizer": {
+                "type": "l1",
+                "value": 1e-3
+            }
+        },            {
+            "name": "batchnorm1",
+            "type": "BatchNormalization"
+        },
+        {
+            "name": "hidden2",
+            "type": "Dense",
+            "kwargs": {
+                "units": 2000,
+                "activation": "relu"
+            },
+            "regularizer": {
+                "type": "l1",
+                "value": 1e-3
+            }
+        },            {
+            "name": "batchnorm2",
+            "type": "BatchNormalization"
+        },
+        {
+            "name": "latent",
+            "type": "Dense",
+
+            "regularizer": {
+                "type": "l1",
+                "value": 1e-3
+            }
+        }
+    ]
+    """
     def _suffix_config_layer_names(self, config, suffix):
         new_config = copy.deepcopy(config)
 
@@ -42,8 +113,12 @@ class Autoencoder:
         return new_config
 
     def __init__(self, encoder_params, decoder_params, input_shape,
-                 latent_shape, optimizer_params=None, loss="mean_squared_error"):
-        """ """
+                 latent_shape, optimizer_params=None, 
+                 loss="mean_squared_error"):
+        """Initiate Autoencoder instance
+        
+
+        """
 
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
