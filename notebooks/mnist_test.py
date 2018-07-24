@@ -76,7 +76,6 @@ def test_variational_autoencoder():
     experiment.log_multiple_params(config)
     experiment.log_parameter("Latent dim", latent_shape[0])
 
-
     ae.fit(x_train, batch_size=1000, epochs=10, validation_data=x_test)
 
     predictions = ae.predict(x_test)
