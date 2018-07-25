@@ -9,7 +9,7 @@ class KLDivergenceLayer(Layer):
     def call(self, inputs):
         mu, log_var = inputs
 
-        kl_batch = 0*K.sum(1 + log_var - 
+        kl_batch = 0.5*K.sum(1 + log_var - 
                              K.square(mu) - 
                              K.exp(log_var),
                              axis=-1)
@@ -27,6 +27,7 @@ class SharedEmbeddingLayer(Layer):
         reg = 0
         for ej in embeddings:
             for ei in embeddings:
-                reg += K.tf.losses.mean_squared_error(ej, ei)
+                #reg += K.tf.losses.mean_squared_error(ej, ei)
+                reg += K.mean(K.abs(ej-ei))
         self.add_loss(self.gamma*reg)
         return embeddings
