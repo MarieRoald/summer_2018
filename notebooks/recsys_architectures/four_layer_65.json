@@ -1,0 +1,59 @@
+{
+    "encoder": [
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 1024
+            },
+            "name": "hidden1",
+            "type": "Dense"
+        },
+        {
+            "name": "batchnorm1",
+            "type": "BatchNormalization"
+        },
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 512
+            },
+            "name": "hidden2",
+            "type": "Dense"
+        },
+        {
+            "name": "batchnorm2",
+            "type": "BatchNormalization"
+        },
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 256
+            },
+            "name": "hidden3",
+            "type": "Dense"
+        },
+        {
+            "name": "batchnorm3",
+            "type": "BatchNormalization"
+        },
+        {
+            "kwargs": {
+                "rate": 0
+            },
+            "name": "dropout",
+            "type": "Dropout"
+        },
+        {
+            "kwargs": {
+                "activation": "relu",
+                "units": 128
+            },
+            "name": "latent",
+            "regularizer": {
+                "type": "l1",
+                "value": 0
+            },
+            "type": "Dense"
+        }
+    ]
+}

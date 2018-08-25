@@ -7,7 +7,7 @@ from log_utils import plot_mean_std_loss, GroupedCometLogger
 from data_reader import DataReader
 import copy
 import numpy as np
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 
 from sys import argv
 
@@ -76,6 +76,9 @@ class MultimodalBase(Autoencoder):
     def _generate_kfold_split(self, n_splits, data, groups):
         kfold = GroupKFold(n_splits=n_splits)
         return kfold.split(data[0], data[0], groups)
+    
+    def generate_group_train_test_split(self, data, groups, random_state=100):
+        return next(GroupShuffleSplit(random_state=random_state).split(data[0], groups=groups))
 
     def _prepare_data(self, data):
         data = [np.asarray(d) for d in data]
@@ -157,8 +160,15 @@ class MultimodalAutoencoder(MultimodalBase):
         return encoders, decoder, autoencoders, combined_autoencoder
 
     def _rmse(self, val_data):
+        #predictions = self.predict(val_data)
+        #val_rmse = np.sqrt(((self._join_dataset(predictions) - self._join_dataset(self._create_output(val_data)))**2).mean())
+        #return val_rmse
+        
+        
         predictions = self.predict(val_data)
-        val_rmse = np.sqrt(((self._join_dataset(predictions) - self._join_dataset(self._create_output(val_data)))**2).mean())
+        val_rmse = []
+        for p in predictions:
+            val_rmse.append(np.sqrt(np.mean((p-self._create_output(val_data))**2)))
         return val_rmse
 
     def _create_validation_data(self, val_data):

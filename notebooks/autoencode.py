@@ -13,7 +13,7 @@ from sklearn.decomposition import PCA
 from pprint import pprint
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit
 from sklearn.metrics.scorer import make_scorer
 from sklearn.model_selection import cross_validate
 
@@ -115,10 +115,7 @@ class Autoencoder:
     def __init__(self, encoder_params, decoder_params, input_shape,
                  latent_shape, optimizer_params=None, 
                  loss="mean_squared_error"):
-        """Initiate Autoencoder instance
-        
-
-        """
+        """Initiate Autoencoder instance"""
 
         self._input_params = {k: v for k, v in locals().items() if k != 'self'}
 
@@ -371,6 +368,35 @@ class Autoencoder:
         experiment.log_figure("Cross validation loss", fig)
 
         return val_errors 
+
+    def generate_group_train_test_split(self, data, groups, random_state=100):
+        return next(GroupShuffleSplit(random_state=random_state).split(data, groups=groups))
+
+    def run_training(self, data, groups, random_state=100, standardize=True, epochs=100, callbacks=None, log_prefix="" ):
+        data = self._prepare_data(data)
+
+        if callbacks is None:
+            callbacks = []
+
+        train_idx, val_idx = self.generate_group_train_test_split(data,groups,random_state=random_state)
+
+        train_data = self._index_data(data, train_idx)
+        val_data = self._index_data(data, val_idx)
+
+        if standardize:
+            train_data, val_data, _ = self._standardize_data(train_data, val_data)
+
+        self.fit(train_data, epochs=epochs, validation_data=val_data, callbacks=callbacks)
+
+        train_pred = self.encode(train_data)
+        val_pred = self.encode(val_data)
+
+        np.save("train_data_embedding.npy", train_pred)
+        np.save("val_data_embedding.npy", val_pred)
+        print(train_pred.shape)
+        print(val_pred.shape)
+
+        return self._rmse(val_data)
 
 if __name__== "__main__":
     filenames = ["X1_train.csv", "X2_train.csv", "X3_train.csv"]

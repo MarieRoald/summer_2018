@@ -30,7 +30,16 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
                                  " (it is automatically set to be identical"
                                  " to the input shape of the encoder)")
         else:
-            decoder_params[-1]["kwargs"] = {}
+            decoder_params[-1]["kwargs"] = {}    
+    
+    def __init__(self, encoder_params, decoder_params, input_shapes,
+                 latent_shape, gamma=0.1, optimizer_params=None, loss="mean_squared_error"):
+        """ """
+        self.gamma = gamma
+        self._input_params = {k: v for k, v in locals().items() if k != 'self'}
+
+        self._build(encoder_params, decoder_params, input_shapes,
+                    latent_shape, optimizer_params=optimizer_params, loss=loss)
 
     def _build(self, encoder_params, decoder_params, input_shapes,
                latent_shape, optimizer_params=None, loss="mean_squared_error"):
@@ -68,7 +77,7 @@ class SharedEmbeddingAutoencoder(MultimodalBase):
         encoders, encoder_inputs = self._create_encoders(encoder_params, input_shapes)
 
         embeddings = [encoder.output for encoder in encoders]
-        embeddings = SharedEmbeddingLayer(gamma=0.1)(embeddings)
+        embeddings = SharedEmbeddingLayer(gamma=self.gamma)(embeddings)
 
         decoders, decoder_outputs = self._create_decoders(decoder_config, latent_shape, embeddings)
         combined_autoencoder = km.Model(inputs=encoder_inputs, outputs=decoder_outputs)

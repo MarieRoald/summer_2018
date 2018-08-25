@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 from pprint import pprint
 
-cfgs = Path('./architectures')
+cfgs = Path('./recsys_architectures')
 
 for p in cfgs.glob('*.json'):
     #run(['python', 'autoencode.py', p])
@@ -11,4 +11,7 @@ for p in cfgs.glob('*.json'):
     
     #run(['python', 'variational_autoencode.py', p])
 
-    run(['python', 'recsys_test.py', p])
+    run(['python', 'recsys_autoencode.py', p])
+    run(['python', 'recsys_multimodal.py', p])
+    run(['python', 'recsys_sharedembedding.py', p])
+    run(['python', 'recsys_sound_autoencode.py', p])
